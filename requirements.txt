@@ -1,5 +1,6 @@
-anthropic==0.34.2
-click==8.1.7
-openai==1.47.0
-PyYAML==6.0.2
+google.generativeai
+anthropic
+click
+openai
+PyYAML
 tzlocal

@@ -20,8 +20,8 @@ paths:
 
 # API clients
 api_keys:
-  anthropic: "ANTHROPIC_API_KEY"
-  openai: "OPENAI_API_KEY"
+  anthropic: "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"
+  openai: "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"
 
 # Logging
 logging:
