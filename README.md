@@ -5,14 +5,9 @@ Large Language Models (LLMs).
 
 ## Overview
 
-`dejavu2-cli` (`dv2`) is a versatile command-line tool designed 
-for executing one-shot queries to multiple language models, 
-including those from OpenAI, Anthropic, and local LLaMA-based 
-models via the Ollama server.
+`dejavu2-cli` (`dv2` for short) is a versatile command-line tool designed for executing one-shot queries to multiple language models, including those from OpenAI, Anthropic, and local LLaMA-based models via the Ollama server.
 
-The `dv2` tool allows users to interact with LLMs efficiently by 
-providing a range of customizable options, and supports context 
-inclusion through reference files and `customKB` knowledge bases.
+The `dv2` tool allows users to interact with LLMs efficiently by providing a range of customizable options, and supports context inclusion through reference files and `customKB` knowledge bases.
 
 ## Features
 
@@ -55,11 +50,13 @@ inclusion through reference files and `customKB` knowledge bases.
 
 2. **Install Dependencies**:
 
+   Recommended to set up a virtual environment first.
+   
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Set Up Configuration**:
+4. **Set Up Configuration**:
 
    - Copy the default configuration to your user config directory:
 
@@ -78,11 +75,11 @@ inclusion through reference files and `customKB` knowledge bases.
        openai: "your_openai_api_key"
      ```
 
-4. **Ensure Ollama Server is Running** (Optional):
+5. **Ensure Ollama Server is Running** (Optional):
 
    - If you plan to use local LLaMA-based models, make sure the [Ollama](https://ollama.ai) server is installed and running.
 
-5. **Run the Script**:
+6. **Run the Script**:
 
    ```bash
    dv2 "Your query here"
