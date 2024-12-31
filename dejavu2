@@ -1,0 +1,6 @@
+#!/bin/bash
+set -eu
+PRG0=$(readlink -fn -- "$0")
+PRGDIR=${PRG0%/*}
+source "$PRGDIR"/.venv/bin/activate
+python3 "$PRGDIR"/dejavu2-cli.py "$@"
