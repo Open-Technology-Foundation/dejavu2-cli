@@ -18,6 +18,11 @@ paths:
   template_path: Agents.json
   customkb: /ai/scripts/customkb/customkb
 
+# API clients
+api_keys:
+  anthropic: "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"
+  openai: "sk-proj-CbTIRJE7esTFCiTJYlWgT3BlbkFJj7mOJNW73KT75sBYeDRK"
+
 # Logging
 logging:
   level: DEBUG
