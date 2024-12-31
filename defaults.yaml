@@ -20,8 +20,8 @@ paths:
 
 # API clients
 api_keys:
-  anthropic: ""
-  openai: ""
+  anthropic: "ANTHROPIC_API_KEY"
+  openai: "OPENAI_API_KEY"
 
 # Logging
 logging:
