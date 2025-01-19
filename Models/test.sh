@@ -1,4 +1,6 @@
 #!/bin/bash
+set -euo pipefail
+declare -- temp=$(ls -la |sort)
 
 # Check for exactly one argument
 if [ "$#" -ne 1 ]; then
