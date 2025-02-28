@@ -23,8 +23,8 @@ paths:
 # - OPENAI_API_KEY
 # Default values (empty) will trigger environment variable lookup
 api_keys:
-  anthropic: ""
-  openai: ""
+#  anthropic: ""
+#  openai: ""
 
 # Logging
 logging:

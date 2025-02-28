@@ -317,17 +317,15 @@ logging.basicConfig(level=logging.ERROR)
 
 # QUERY ===============================================================================
 # Initialize API clients
-def get_api_key(config_key, env_var_name):
-  """Get API key from config or environment variable"""
-  api_key = config['api_keys'].get(config_key, '')
-  if not api_key:  # If empty in config, try environment variable
-    api_key = os.environ.get(env_var_name, '')
-    if not api_key:
-      logger.warning(f"No API key found for {config_key}. Check {env_var_name} environment variable.")
+def get_api_key(env_var_name):
+  """Get API key from environment variable"""
+  api_key = os.environ.get(env_var_name, '')
+  if not api_key:
+    logger.warning(f"No API key found. Set {env_var_name} environment variable.")
   return api_key
 
-anthropic_api_key = get_api_key('anthropic', 'ANTHROPIC_API_KEY')
-openai_api_key = get_api_key('openai', 'OPENAI_API_KEY')
+anthropic_api_key = get_api_key('ANTHROPIC_API_KEY')
+openai_api_key = get_api_key('OPENAI_API_KEY')
 
 anthropic_client = Anthropic(api_key=anthropic_api_key)
 anthropic_client.beta_headers = {
