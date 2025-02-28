@@ -1,4 +1,60 @@
 {
+  "claude-3-7-sonnet-latest": {
+    "model": "claude-3-7-sonnet-latest",
+    "alias": "sonnet",
+    "parent": "Anthropic",
+    "model_category": "LLM",
+    "family": "claude3",
+    "series": "claude3",
+    "description": "Highest level of intelligence and capability with toggleable extended thinking",
+    "training_data": "2024-10",
+    "data_cutoff_date": "2024-10",
+    "url": "https://api.anthropic.com/v1",
+    "apikey": "ANTHROPIC_API_KEY",
+    "context_window": 200000,
+    "max_output_tokens": 128000,
+    "token_costs": "$3.00/$15.00",
+    "vision": 1,
+    "available": 9,
+    "enabled": 1
+  },
+  "claude-3-5-sonnet-latest": {
+    "model": "claude-3-5-sonnet-latest",
+    "alias": "sonnet35",
+    "parent": "Anthropic",
+    "model_category": "LLM",
+    "family": "claude3",
+    "series": "claude3",
+    "description": "Claude 3.5 Sonnet with extended 8K tokens output",
+    "training_data": "2024-04",
+    "data_cutoff_date": "2024-04",
+    "url": "https://api.anthropic.com/v1",
+    "apikey": "ANTHROPIC_API_KEY",
+    "context_window": 200000,
+    "max_output_tokens": 8192,
+    "token_costs": "$3.00/$15.00",
+    "vision": 1,
+    "available": 9,
+    "enabled": 1
+  },
+  "o3-mini-2025-01-31": {
+    "model": "o3-mini-2025-01-31",
+    "alias": "o3mini",
+    "parent": "OpenAI",
+    "model_category": "LLM",
+    "family": "gpt4",
+    "series": "gpt4",
+    "description": "Language model trained with reinforcement learning to perform complex reasoning.",
+    "training_data": "2024-10",
+    "data_cutoff_date": "2024-10",
+    "url": "https://api.openai.com/v1",
+    "apikey": "OPENAI_API_KEY",
+    "context_window": 128000,
+    "max_output_tokens": 32768,
+    "token_costs": "",
+    "available": 1,
+    "enabled": 9
+  },
   "o1": {
     "model": "o1-preview",
     "alias": "o1",
@@ -270,27 +326,8 @@
     "available": 9,
     "enabled": 9
   },
-  "claude-3-5-sonnet-latest": {
-    "model": "claude-3-5-sonnet-latest",
-    "alias": "sonnet",
-    "parent": "Anthropic",
-    "model_category": "LLM",
-    "family": "claude3",
-    "series": "claude3",
-    "description": "Claude 3.5 Sonnet with extended 8K tokens output",
-    "training_data": "2024-04",
-    "data_cutoff_date": "2024-04",
-    "url": "https://api.anthropic.com/v1",
-    "apikey": "ANTHROPIC_API_KEY",
-    "context_window": 200000,
-    "max_output_tokens": 8192,
-    "token_costs": "$3.00/$15.00",
-    "vision": 1,
-    "available": 9,
-    "enabled": 1
-  },
-  "claude-3-haiku-latest": {
-    "model": "claude-3-haiku-latest",
+  "claude-3-5-haiku-latest": {
+    "model": "claude-3-5-haiku-latest",
     "alias": "haiku",
     "parent": "Anthropic",
     "model_category": "LLM",
@@ -306,7 +343,7 @@
     "token_costs": "$1.00/$5.00",
     "vision": 1,
     "available": 9,
-    "enabled": 0
+    "enabled": 1
   },
   "gemini-1.5-flash-latest": {
     "model": "gemini-1.5-flash-latest",
@@ -344,7 +381,7 @@
     "max_output_tokens": 4000,
     "token_costs": "0",
     "available": 9,
-    "enabled": 0
+    "enabled": 1
   },
   "llama3.1": {
     "model": "llama3.1",

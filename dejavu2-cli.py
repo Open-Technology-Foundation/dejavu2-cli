@@ -79,46 +79,21 @@ Command-Line Options:
 
 Dependencies:
 -------------
-- **Python Version**: 3.7 or higher
+- **Python Version**: 3.8 or higher
 
 - **Required Packages** (specified in `requirements.txt`):
-  - `anthropic==0.34.2`
-  - `click==8.1.7`
-  - `openai==1.47.0`
-  - `PyYAML==6.0.2`
+  google.generativeai
+  anthropic
+  click
+  openai
+  PyYAML
+  tzlocal
 
-Installation:
--------------
-1. **Clone the Repository**:
-   ```bash
-   git clone https://github.com/yourusername/dejavu2-cli.git
-   cd dejavu2-cli
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-3. **Set Up Configuration**:
-   - Copy the default configuration to your user config directory:
-   ```bash
-   mkdir -p ~/.config/dejavu2-cli
-   cp defaults.yaml ~/.config/dejavu2-cli/config.yaml
-   ```
-   - Edit `~/.config/dejavu2-cli/config.yaml` to add your API keys and customize settings.
-
-4. **Run the Script**:
-   ```bash
-   ./dejavu2-cli.py "Your query here"
-   ```
 
 Configuration Files:
 --------------------
 - **defaults.yaml**: Contains default settings, model shortcuts, paths, API keys, and logging configurations.
 - **llm-Templates.yaml**: Defines templates for initializing query parameters.
-
-**Note**: Avoid including sensitive information like API keys in shared or public configurations.
 
 Templates:
 ----------
@@ -200,14 +175,12 @@ from openai import OpenAI
 # Constants --------------------------------------------------------------------
 
 PRGDIR = os.path.dirname(os.path.realpath(__file__))
+# Import version from version.py module
 try:
-  with open(os.path.join(PRGDIR, '.version'), 'r') as f:
-    VERSION = f.readline().strip()
-except FileNotFoundError:
+  from version import __version__ as VERSION
+except ImportError:
   VERSION = 'unknown'
-except Exception as e:
-  print(f"Error reading version file: {e}")
-  VERSION = 'error'
+  print("Warning: Could not import version.py module. Version will be set to 'unknown'.")
 SCRIPT_NAME = os.path.splitext(os.path.basename(__file__))[0]
 DEFAULT_CONFIG_PATH = os.path.join(PRGDIR, 'defaults.yaml')
 USER_CONFIG_PATH = os.path.expanduser('~/.config/dejavu2-cli/config.yaml')
@@ -344,11 +317,24 @@ logging.basicConfig(level=logging.ERROR)
 
 # QUERY ===============================================================================
 # Initialize API clients
-anthropic_client = Anthropic(api_key=config['api_keys']['anthropic'])
+def get_api_key(config_key, env_var_name):
+  """Get API key from config or environment variable"""
+  api_key = config['api_keys'].get(config_key, '')
+  if not api_key:  # If empty in config, try environment variable
+    api_key = os.environ.get(env_var_name, '')
+    if not api_key:
+      logger.warning(f"No API key found for {config_key}. Check {env_var_name} environment variable.")
+  return api_key
+
+anthropic_api_key = get_api_key('anthropic', 'ANTHROPIC_API_KEY')
+openai_api_key = get_api_key('openai', 'OPENAI_API_KEY')
+
+anthropic_client = Anthropic(api_key=anthropic_api_key)
 anthropic_client.beta_headers = {
-  "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+  "anthropic-beta": "output-128k-2025-02-19"
 }
-openai_client = OpenAI(api_key=config['api_keys']['openai'])
+#  "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
+openai_client = OpenAI(api_key=openai_api_key)
 llama_client = OpenAI(base_url='http://localhost:11434/v1', api_key='ollama')
 
 def query(query_text: str, systemprompt: str, messages:list, model: str, temperature: float, max_tokens: int) -> str:
@@ -359,7 +345,7 @@ def query(query_text: str, systemprompt: str, messages:list, model: str, tempera
   # time-space
   systemprompt = spacetime_placeholders(systemprompt)
 
-  if model.startswith(('gpt', 'chatgpt', 'o1')):
+  if model.startswith(('gpt', 'chatgpt', 'o1', 'o3')):
     return query_openai(query_text, systemprompt, model, temperature, max_tokens)
   elif model.startswith('claude'):
     return query_anthropic(query_text, systemprompt, model, temperature, max_tokens)
@@ -410,6 +396,7 @@ def get_available_gemini_models():
 def query_llama(query_text: str, systemprompt: str, model: str, temperature: float, max_tokens: int) -> str:
   """Send a query to a local LLaMA-based model via the Ollama server."""
   try:
+    # No API key check needed for local Ollama server, but check that it's running
     response = llama_client.chat.completions.create(
       model=model,
       messages=[
@@ -422,7 +409,11 @@ def query_llama(query_text: str, systemprompt: str, model: str, temperature: flo
     return response.choices[0].message.content
 
   except Exception as e:
-    logger.error(f"Error querying {model}: {e}")
+    # Provide more helpful error message for common Ollama connection issues
+    if "connection refused" in str(e).lower():
+      logger.error(f"Connection to Ollama server failed. Make sure Ollama is running on localhost:11434.")
+    else:
+      logger.error(f"Error querying {model}: {e}")
     raise
 
 # openai -------------------------------------------------------------------------------
@@ -430,8 +421,12 @@ def query_openai(query: str, system: str, model: str, temperature: float, max_to
   """Send a query to the OpenAI API and return the response."""
   #logger.warning(f'Q1: {model=} {temperature=} {max_tokens=} {query=} {system=}')
   try:
+    # Check if we have a valid API key
+    if not openai_api_key:
+      raise ValueError("Missing OpenAI API key. Set OPENAI_API_KEY environment variable.")
+      
     # o1* Models
-    if model.startswith('o1'):
+    if model.startswith(('o1', 'o3')):
       response = openai_client.chat.completions.create(
       model=model,
       messages=[
@@ -464,6 +459,10 @@ def query_anthropic(query_text: str, systemprompt: str, model: str, temperature:
     "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
   }
   try:
+    # Check if we have a valid API key
+    if not anthropic_api_key:
+      raise ValueError("Missing Anthropic API key. Set ANTHROPIC_API_KEY environment variable.")
+      
     message = anthropic_client.messages.create(
       max_tokens=max_tokens,
       messages=[{"role": "user", "content": query_text}],

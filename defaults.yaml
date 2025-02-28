@@ -14,14 +14,17 @@ defaults:
 # Paths
 paths:
   prgdir: ""  # Will be set programmatically at runtime
-  XXXtemplate_path: llm-Templates.yaml
   template_path: Agents.json
   customkb: /ai/scripts/customkb/customkb
 
-# API clients
+# API clients - Values are read from environment variables by default
+# Set these environment variables:
+# - ANTHROPIC_API_KEY
+# - OPENAI_API_KEY
+# Default values (empty) will trigger environment variable lookup
 api_keys:
-  anthropic: "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"
-  openai: "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"
+  anthropic: ""
+  openai: ""
 
 # Logging
 logging:
