@@ -10,11 +10,18 @@
 - View status: `./dejavu2-cli --status`
 
 ## Environment Setup
-- Set API keys as environment variables:
+- API keys must be set as environment variables:
   ```
+  # Required for Anthropic models (claude-*)
   export ANTHROPIC_API_KEY="your-api-key"
+  
+  # Required for OpenAI models (gpt-*, o1-*)
   export OPENAI_API_KEY="your-api-key"
+  
+  # No key needed for local Ollama models (llama-*)
+  # Ensure Ollama server is running locally
   ```
+- Never store API keys in configuration files
 
 ## Version Management
 - Version is maintained in `version.py` as `__version__`

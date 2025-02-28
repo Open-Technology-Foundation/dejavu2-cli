@@ -6,4 +6,4 @@ This module provides a single source of truth for the version number
 of the dejavu2-cli application.
 """
 
-__version__ = "0.9.8"
+__version__ = "0.9.10"

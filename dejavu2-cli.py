@@ -270,12 +270,16 @@ def load_config() -> Dict[str, Any]:
       sys.exit(1)
 
   # Validate required keys
-  required_keys = ['paths', 'api_keys', 'defaults']
+  required_keys = ['paths', 'defaults']
   for key in required_keys:
     if key not in config:
       logger.error(f"Missing required config key: {key}")
       sys.exit(1)
 
+  # Ensure API keys section exists even if not in config
+  if 'api_keys' not in config:
+    config['api_keys'] = {}
+      
   # Ensure paths are correctly set
   config['paths']['prgdir'] = PRGDIR
   return config
@@ -317,15 +321,14 @@ logging.basicConfig(level=logging.ERROR)
 
 # QUERY ===============================================================================
 # Initialize API clients
-def get_api_key(env_var_name):
-  """Get API key from environment variable"""
-  api_key = os.environ.get(env_var_name, '')
-  if not api_key:
-    logger.warning(f"No API key found. Set {env_var_name} environment variable.")
-  return api_key
+# Get API keys from environment variables only
+anthropic_api_key = os.environ.get('ANTHROPIC_API_KEY', '')
+if not anthropic_api_key:
+  logger.warning("No Anthropic API key found. Set ANTHROPIC_API_KEY environment variable.")
 
-anthropic_api_key = get_api_key('ANTHROPIC_API_KEY')
-openai_api_key = get_api_key('OPENAI_API_KEY')
+openai_api_key = os.environ.get('OPENAI_API_KEY', '')
+if not openai_api_key:
+  logger.warning("No OpenAI API key found. Set OPENAI_API_KEY environment variable.")
 
 anthropic_client = Anthropic(api_key=anthropic_api_key)
 anthropic_client.beta_headers = {

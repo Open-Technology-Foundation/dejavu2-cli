@@ -1,4 +1,5 @@
 # defaults.yaml
+# Configuration for the dejavu2-cli application
 
 # Command line defaults
 defaults:
@@ -16,15 +17,6 @@ paths:
   prgdir: ""  # Will be set programmatically at runtime
   template_path: Agents.json
   customkb: /ai/scripts/customkb/customkb
-
-# API clients - Values are read from environment variables by default
-# Set these environment variables:
-# - ANTHROPIC_API_KEY
-# - OPENAI_API_KEY
-# Default values (empty) will trigger environment variable lookup
-api_keys:
-#  anthropic: ""
-#  openai: ""
 
 # Logging
 logging:
