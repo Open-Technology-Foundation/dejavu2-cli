@@ -8,10 +8,10 @@ Description:
 
 Key Features:
 -------------
-- **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, and LLaMA models by specifying the model name or using predefined shortcuts.
+- **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, and LLaMA models by specifying the model name or using predefined aliases defined in Models.json.
 - **Customizable Parameters**: Fine-tune responses by adjusting parameters like temperature, maximum tokens, and system prompts directly from the command line.
-- **Contextual Inputs**: Enhance queries by including content from reference text files or knowledge bases, allowing for richer and more informed responses.
-- **Template Management**: Utilize user-defined templates in YAML format to initialize query parameters, ensuring consistency and saving time on repetitive tasks.
+- **Contextual Inputs**: Enhance queries by including content from reference text files or customKB knowledge bases, allowing for richer and more informed responses.
+- **Template Management**: Utilize user-defined templates in JSON format to initialize query parameters, ensuring consistency and saving time on repetitive tasks.
 - **Configuration Loading**: Automatically load default settings and user-specific configurations from YAML files, with the ability to override them via command-line options.
 - **Listing and Editing Tools**: List available models, templates, and knowledge bases. Edit configuration and template files directly from the command line using your preferred text editor.
 - **Status Display**: Preview the current state of all arguments and options before executing a query to verify and adjust settings as needed.
@@ -21,13 +21,13 @@ Usage:
 Run `dejavu2-cli` with your query and desired options:
 
 ```bash
-dejavu2-cli "Your query here" [options]
+./dejavu2-cli "Your query here" [options]
 ```
 
 Options can be viewed using:
 
 ```bash
-dejavu2-cli --help
+./dejavu2-cli --help
 ```
 
 Command-Line Options:
@@ -36,7 +36,7 @@ Command-Line Options:
   Set the system prompt for the AI assistant (e.g., "You are a helpful assistant.").
 
 - `-m, --model TEXT`
-  Specify the LLM model to use (e.g., "gpt-4", "claude-2", "llama3.1").
+  Specify the LLM model to use (e.g., "gpt-4o", "claude-3-7-sonnet-latest", "llama3.1") or alias (e.g., "sonnet", "gpt4o").
 
 - `-t, --temperature FLOAT`
   Set the sampling temperature for the LLM (e.g., `0.7`); higher values make output more random.
@@ -48,7 +48,7 @@ Command-Line Options:
   Include content from reference text files as context (comma-separated list of file paths).
 
 - `-k, --knowledgebase TEXT`
-  Specify a knowledge base to query for additional context.
+  Specify a customKB knowledge base to query for additional context.
 
 - `-Q, --knowledgebase-query TEXT`
   Define a query to send to the knowledge base (defaults to the main query if not provided).
@@ -57,7 +57,7 @@ Command-Line Options:
   List all available knowledge bases.
 
 - `-T, --template TEXT`
-  Use a template to initialize arguments (defined in `llm-Templates.yaml`).
+  Use a template to initialize arguments (defined in `Agents.json`).
 
 - `-l, --list-template TEXT`
   List details of all templates or a specific template.
@@ -66,7 +66,7 @@ Command-Line Options:
   List the names of all available templates.
 
 - `-E, --edit-templates`
-  Edit the `llm-Templates.yaml` file using the default editor.
+  Edit the templates file using the default editor.
 
 - `-D, --edit-defaults`
   Edit the `defaults.yaml` configuration file.
@@ -74,12 +74,21 @@ Command-Line Options:
 - `-S, --status`
   Display the current state of all arguments and options.
 
-- `--list-models`
-  List all available LLM models as defined in `defaults.yaml`.
+- `-a, --list-models`
+  List all available LLM models as defined in `Models.json`.
+
+- `-A, --list-models-details`
+  List all available models with detailed information.
+
+- `-p, --project-name TEXT`
+  The project name for recording conversations.
+
+- `-o, --output-dir TEXT`
+  Directory to output conversation results to.
 
 Dependencies:
 -------------
-- **Python Version**: 3.8 or higher
+- **Python Version**: 3.7 or higher
 
 - **Required Packages** (specified in `requirements.txt`):
   google.generativeai
@@ -89,67 +98,77 @@ Dependencies:
   PyYAML
   tzlocal
 
+Authentication:
+--------------
+API keys must be set as environment variables:
+- ANTHROPIC_API_KEY: For Claude models
+- OPENAI_API_KEY: For OpenAI models (GPT, O1, etc.)
+- No API key needed for local Ollama models
 
 Configuration Files:
 --------------------
-- **defaults.yaml**: Contains default settings, model shortcuts, paths, API keys, and logging configurations.
-- **llm-Templates.yaml**: Defines templates for initializing query parameters.
+- **defaults.yaml**: Contains default settings, paths, and logging configurations.
+- **Agents.json**: Defines templates for initializing query parameters.
+- **Models.json**: Defines available models and their aliases.
 
 Templates:
 ----------
-Templates allow you to predefine sets of parameters for common tasks. They are stored in `llm-Templates.yaml` and can include settings like the system prompt, model, temperature, and more.
+Templates allow you to predefine sets of parameters for common tasks. They are stored in `Agents.json` and can include settings like the system prompt, model, temperature, and more.
 
 Example Template Definition:
-```yaml
-Helpful AI:
-  systemprompt: You are a friendly and helpful AI Assistant.
-  model: sonnet
-  max_tokens: 4000
-  temperature: 0.55
-  knowledgebase: ""
+```json
+"DéjàVu2 - Helpful AI": {
+  "category": "General",
+  "knowledgebase": "",
+  "max_tokens": 4000,
+  "model": "claude-3-5-sonnet-latest",
+  "monospace": false,
+  "systemprompt": "Your name is DéjàVu2. You are a friendly and helpful general AI assistant.",
+  "temperature": 0.35
+}
 ```
 
 Usage:
 ```bash
-dejavu2-cli "Explain quantum computing in simple terms." -T "Dejavu2"
+./dejavu2-cli "Explain quantum computing in simple terms." -T "DéjàVu2 - Helpful AI"
 ```
 
 Examples:
 ---------
 - **Basic Query**:
   ```bash
-  dejavu2-cli "What is the capital of France?"
+  ./dejavu2-cli "What is the capital of France?"
   ```
 
 - **Using a Template**:
   ```bash
-  dejavu2-cli "Provide a summary of the latest news." -T "Summarize"
+  ./dejavu2-cli "Provide a summary of the latest news." -T "Summariser - Summary Machine"
   ```
 
 - **Specifying a Model and Adjusting Temperature**:
   ```bash
-  dejavu2-cli "Generate a creative story about a flying car." -m gpt4 -t 0.9
+  ./dejavu2-cli "Generate a creative story about a flying car." -m gpt4o -t 0.9
   ```
 
 - **Including Reference Files**:
   ```bash
-  dejavu2-cli "Analyze the following code." -r "script.py,helpers.py"
+  ./dejavu2-cli "Analyze the following code." -r "script.py,helpers.py"
   ```
 
 - **Querying with a Knowledge Base**:
   ```bash
-  dejavu2-cli "Explain the company's financial position." -k "financial_reports"
+  ./dejavu2-cli "Explain the company's financial position." -k "financial_reports"
   ```
 
-Author Information:
--------------------
-- **Name**: Leet
-- **Role**: Elite Full-Stack Programmer and Systems Engineer
+Version Management:
+------------------
+The version is stored in the version.py module as __version__ and follows semantic versioning (major.minor.patch).
+Use version_updater.py to increment version numbers.
 
 Notes:
 ------
 - Ensure that the Ollama server is running locally if you intend to use local LLaMA-based models.
-- The script assumes you are operating on Ubuntu Linux.
+- The script is designed to operate on Ubuntu Linux.
 
 ---
 """
@@ -224,6 +243,18 @@ ps_non_alnum_re = re.compile(r'[^a-zA-Z0-9]+')
 ps_quotes_re = re.compile(r"[\"'`’´]")
 def post_slug(input_str: str, sep_char: str = '-',
     preserve_case: bool = False, max_len: int = 0) -> str:
+  """
+  Create a URL/filename-friendly slug from a given string.
+  
+  Args:
+      input_str: The string to convert to a slug
+      sep_char: Character to use as a separator (default: '-')
+      preserve_case: If False, converts to lowercase (default: False)
+      max_len: Maximum length of the slug (default: 0, no limit)
+      
+  Returns:
+      A clean, URL-friendly slug string
+  """
   if sep_char == '': sep_char = '-'
   sep_char = sep_char[0]
   input_str = input_str.translate(translation_table)
@@ -293,6 +324,22 @@ from datetime import datetime
 import tzlocal
 
 def spacetime_placeholders(prompt='{{spacetime}}'):
+  """
+  Replace date/time placeholders in a prompt string with current values.
+  
+  Supported placeholders:
+  - {{date}}: Current date in YYYY-MM-DD format
+  - {{time}}: Current time in HH:MM:SS format
+  - {{dow}}: Current day of week name
+  - {{tz}}: Current timezone
+  - {{spacetime}}: Combined string with day, date, time, and timezone
+  
+  Args:
+      prompt: The string containing placeholders to replace
+      
+  Returns:
+      String with placeholders replaced by current values
+  """
   if '{{' not in prompt:
     return prompt
   now = datetime.now()
@@ -339,11 +386,27 @@ openai_client = OpenAI(api_key=openai_api_key)
 llama_client = OpenAI(base_url='http://localhost:11434/v1', api_key='ollama')
 
 def query(query_text: str, systemprompt: str, messages:list, model: str, temperature: float, max_tokens: int) -> str:
-  """Route the query to the appropriate API based on the model specified."""
+  """
+  Route the query to the appropriate API based on the model specified.
+  
+  Args:
+      query_text: The user's query or prompt
+      systemprompt: System prompt that guides the model's behavior
+      messages: List of previous messages in the conversation (if any)
+      model: The canonical model name to use
+      temperature: Sampling temperature (higher = more random)
+      max_tokens: Maximum number of tokens in the response
+      
+  Returns:
+      The model's response as a string
+      
+  Raises:
+      ValueError: If an unknown model is specified
+  """
   if max_tokens > model_parameters['max_output_tokens']:
     max_tokens = model_parameters['max_output_tokens']
 
-  # time-space
+  # Process time/date placeholders in system prompt
   systemprompt = spacetime_placeholders(systemprompt)
 
   if model.startswith(('gpt', 'chatgpt', 'o1', 'o3')):
@@ -360,7 +423,23 @@ def query(query_text: str, systemprompt: str, messages:list, model: str, tempera
 # gemini -------------------------------------------------------------------------------
 import google.generativeai as genai
 def query_gemini(query: str, system: str, model: str, temperature, max_tokens) -> str:
-  """Sends a query to a Gemini API (all text models) and returns the response."""
+  """
+  Send a query to the Google Gemini API and return the response.
+  
+  Args:
+      query: The user's query or prompt
+      system: System prompt that guides the model's behavior
+      model: The Gemini model name to use
+      temperature: Sampling temperature (higher = more random)
+      max_tokens: Maximum number of tokens in the response
+      
+  Returns:
+      The model's response as a string
+      
+  Raises:
+      ValueError: For invalid parameters
+      Exception: If the API request fails
+  """
   try:
     gen_config = genai.types.GenerationConfig(
       temperature=temperature,
@@ -379,7 +458,18 @@ def query_gemini(query: str, system: str, model: str, temperature, max_tokens) -
     raise
 
 def get_available_gemini_models():
-  """Retrieves a list of available text-based Gemini models, excluding specified models."""
+  """
+  Retrieve a list of available text-based Gemini models from the Google API.
+  
+  Filters out models that are not suitable for text generation, including embedding 
+  models and other excluded model types.
+  
+  Returns:
+      List of model names available through the Google Generative AI API
+      
+  Raises:
+      Exception: If the API request fails
+  """
   try:
     available_models = genai.list_models()
     excluded_models = [ "models/aqa", "models/chat-bison-001", "models/text-bison-001", "models/gemini-1.0-pro-latest", "models/gemini-1.0-pro-vision-latest", "models/gemini-pro-vision", "models/gemini-1.5-pro-002" ]
@@ -395,7 +485,22 @@ def get_available_gemini_models():
 
 # llama -------------------------------------------------------------------------------
 def query_llama(query_text: str, systemprompt: str, model: str, temperature: float, max_tokens: int) -> str:
-  """Send a query to a local LLaMA-based model via the Ollama server."""
+  """
+  Send a query to a local LLaMA-based model via the Ollama server.
+  
+  Args:
+      query_text: The user's query or prompt
+      systemprompt: System prompt that guides the model's behavior
+      model: The LLaMA model name to use
+      temperature: Sampling temperature (higher = more random)
+      max_tokens: Maximum number of tokens in the response
+      
+  Returns:
+      The model's response as a string
+      
+  Raises:
+      Exception: If the Ollama server is not running or returns an error
+  """
   try:
     # No API key check needed for local Ollama server, but check that it's running
     response = llama_client.chat.completions.create(
@@ -419,7 +524,23 @@ def query_llama(query_text: str, systemprompt: str, model: str, temperature: flo
 
 # openai -------------------------------------------------------------------------------
 def query_openai(query: str, system: str, model: str, temperature: float, max_tokens: int) -> str:
-  """Send a query to the OpenAI API and return the response."""
+  """
+  Send a query to the OpenAI API and return the response.
+  
+  Args:
+      query: The user's query or prompt
+      system: System prompt that guides the model's behavior
+      model: The OpenAI model name to use
+      temperature: Sampling temperature (higher = more random)
+      max_tokens: Maximum number of tokens in the response
+      
+  Returns:
+      The model's response as a string
+      
+  Raises:
+      ValueError: If the OpenAI API key is missing
+      Exception: If the API request fails
+  """
   #logger.warning(f'Q1: {model=} {temperature=} {max_tokens=} {query=} {system=}')
   try:
     # Check if we have a valid API key
@@ -455,7 +576,23 @@ def query_openai(query: str, system: str, model: str, temperature: float, max_to
 
 # anthropic -------------------------------------------------------------------------------
 def query_anthropic(query_text: str, systemprompt: str, model: str, temperature: float, max_tokens: int) -> str:
-  """Send a query to the Anthropic API and return the response."""
+  """
+  Send a query to the Anthropic API and return the response.
+  
+  Args:
+      query_text: The user's query or prompt
+      systemprompt: System prompt that guides the model's behavior
+      model: The Anthropic Claude model name to use
+      temperature: Sampling temperature (higher = more random)
+      max_tokens: Maximum number of tokens in the response
+      
+  Returns:
+      The model's response as a string
+      
+  Raises:
+      ValueError: If the Anthropic API key is missing
+      Exception: If the API request fails
+  """
   beta_headers = {
     "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
   }
@@ -480,7 +617,22 @@ def query_anthropic(query_text: str, systemprompt: str, model: str, temperature:
 
 # CONTEXT =============================================================================
 def get_reference_string(reference: str) -> str:
-  """Process reference files and return their contents as a formatted string."""
+  """
+  Process reference files and return their contents as an XML-formatted string.
+  
+  Takes a comma-separated list of file paths, reads each file,
+  and formats the contents as XML reference elements.
+  
+  Args:
+      reference: A comma-separated list of file paths to include as references
+      
+  Returns:
+      String containing the formatted reference content, or empty string if no reference
+      
+  Raises:
+      FileNotFoundError: If any of the reference files cannot be found
+      IOError: If there's an error reading any of the files
+  """
   if not reference:
     return ''
   reference_string = ''
@@ -503,7 +655,23 @@ def get_reference_string(reference: str) -> str:
 
 
 def get_knowledgebase_string(knowledgebase: str, knowledgebase_query: str) -> str:
-  """Retrieve and return context from the specified knowledge base as a formatted string."""
+  """
+  Retrieve and return context from the specified knowledge base as an XML-formatted string.
+  
+  Uses the customKB executable to query the knowledge base and format the results.
+  
+  Args:
+      knowledgebase: Name or path of the knowledge base (.cfg file)
+      knowledgebase_query: Query to send to the knowledge base
+      
+  Returns:
+      String containing the formatted knowledge base results, or empty string if no knowledge base
+      
+  Raises:
+      FileNotFoundError: If the knowledge base cannot be found
+      subprocess.CalledProcessError: If the customKB query fails
+      Exception: For other unexpected errors
+  """
   if not knowledgebase:
     return ''
   knowledgebase = f"{knowledgebase}.cfg" if not knowledgebase.endswith('.cfg') else knowledgebase
@@ -533,7 +701,19 @@ def get_knowledgebase_string(knowledgebase: str, knowledgebase_query: str) -> st
 
 #===============================================================================
 def edit_yaml_file(filename: str):
-  """Edit the specified YAML file using the system's default editor or 'p'."""
+  """
+  Edit the specified YAML file using the system's default editor or 'p'.
+  
+  Creates a temporary copy of the file, opens it in the editor, validates
+  the YAML syntax, and replaces the original file if valid.
+  
+  Args:
+      filename: Path to the YAML file to edit
+      
+  Raises:
+      subprocess.CalledProcessError: If the editor fails to launch
+      yaml.YAMLError: If the edited file contains invalid YAML
+  """
   editor = os.environ.get('EDITOR', 'p').strip()
   # Create a temporary copy of the file
   with tempfile.NamedTemporaryFile(mode='w', suffix='.yaml', delete=False) as temp_file:
@@ -562,7 +742,21 @@ def edit_yaml_file(filename: str):
 
 #===============================================================================
 def list_knowledge_bases(vectordbs_path: str):
-  """List all available knowledge bases in the specified directory."""
+  """
+  List all available knowledge bases in the specified directory.
+  
+  Recursively searches for .cfg files in the vectordbs_path directory and
+  displays their names in alphabetical order.
+  
+  Args:
+      vectordbs_path: Path to the directory containing knowledge base files
+      
+  Returns:
+      List of canonical paths to knowledge base files
+      
+  Raises:
+      ValueError: If the vectordbs_path is not a valid directory
+  """
   if not os.path.isdir(vectordbs_path):
     raise ValueError(f"'{vectordbs_path}' is not a valid directory")
 
@@ -592,14 +786,35 @@ def list_knowledge_bases(vectordbs_path: str):
 # TEMPLATES ===============================================================================
 def normalize_key(key: str) -> str:
   """
-  Normalize a key by converting to lowercase, removing spaces and underscores,
-  and chopping off '-' and everything after it if present.
+  Normalize a template key for case-insensitive, fuzzy matching.
+  
+  Transforms the key by:
+  1. Taking only the part before any '-' character
+  2. Converting to lowercase
+  3. Removing spaces and underscores
+  
+  Args:
+      key: The original template key/name
+      
+  Returns:
+      Normalized version of the key for comparison
   """
   key = key.split('-')[0].strip()
   return key.lower().replace(' ', '').replace('_', '')
 
 def load_template_data() -> Dict[str, Any]:
-  """Load and return data from the template JSON file."""
+  """
+  Load and return data from the templates file (Agents.json).
+  
+  Reads the templates file specified by TEMPLATE_PATH and parses it as JSON.
+  
+  Returns:
+      Dictionary containing template definitions
+      
+  Raises:
+      FileNotFoundError: If the templates file cannot be found
+      json.JSONDecodeError: If the file contains invalid JSON
+  """
   try:
     with open(TEMPLATE_PATH, 'r', encoding='utf-8') as file:
       return json.load(file)
@@ -611,7 +826,18 @@ def load_template_data() -> Dict[str, Any]:
     sys.exit(1)
 
 def get_template(template_key: str) -> Optional[tuple[str, Dict[str, Any]]]:
-  """Retrieve a template by its key, returning the key and its data if found."""
+  """
+  Retrieve a template by its key, using fuzzy matching for the lookup.
+  
+  Normalizes the provided key and searches for a matching template,
+  returning both the original template name and its data.
+  
+  Args:
+      template_key: Key/name of the template to retrieve
+      
+  Returns:
+      Tuple of (original_key, template_data) if found, None otherwise
+  """
   normalized_key = normalize_key(template_key)
   data = load_template_data()
   for key, value in data.items():
@@ -620,8 +846,13 @@ def get_template(template_key: str) -> Optional[tuple[str, Dict[str, Any]]]:
   return None
 
 def print_template(name: str, data: Dict[str, Any]) -> None:
-  """Print the specified template's name and its details
-      in a readable format."""
+  """
+  Print the specified template's name and its details in a readable format.
+  
+  Args:
+      name: Name of the template
+      data: Dictionary containing the template's properties
+  """
   print(f"Template: {name}")
   for key, value in data.items():
     if key == 'systemprompt':
@@ -631,8 +862,12 @@ def print_template(name: str, data: Dict[str, Any]) -> None:
   print()
 
 def list_template_names():
-  """List the names of all templates with their details
-      in a columnated format."""
+  """
+  List the names and basic details of all templates in a columnar format.
+  
+  Displays a table with template names, models, temperature settings,
+  token limits, and knowledge base settings.
+  """
   data = load_template_data()
   sorted_names = sorted(data.keys(), key=str.casefold)
   columns = [
@@ -663,7 +898,14 @@ def list_template_names():
     click.echo('  '.join(row))
 
 def list_templates(template: Optional[str] = None, names_only: bool = False) -> None:
-  """List all templates or details of a specific template based on the provided argument."""
+  """
+  List all templates or details of a specific template.
+  
+  Args:
+      template: If provided, displays details for just this template.
+                If 'all' or None, displays all templates.
+      names_only: If True, uses the more concise list_template_names format
+  """
   data = load_template_data()
 
   if names_only:
@@ -683,7 +925,13 @@ def list_templates(template: Optional[str] = None, names_only: bool = False) -> 
 
 # LIST LLM MODELS ============================================================
 def list_models(details=False) -> None:
-  """List all LLM models as defined in Models.json."""
+  """
+  List all available LLM models as defined in Models.json.
+  
+  Args:
+      details: If True, shows detailed information about each model.
+              If False, shows only the model names.
+  """
   if details:
     models = list_available_canonical_models_with_details()
     for name, details in models.items():
@@ -698,6 +946,19 @@ def list_models(details=False) -> None:
   return
 
 def list_available_canonical_models(json_file=None):
+  """
+  List all available model names from Models.json.
+  
+  Args:
+      json_file: Path to the Models.json file (default: auto-detected)
+      
+  Returns:
+      List of available model names sorted alphabetically
+      
+  Raises:
+      FileNotFoundError: Handled internally, returns empty list
+      JSONDecodeError: Handled internally, returns empty list
+  """
   if not json_file:
     json_file = f"{PRGDIR}/Models.json"
   try:
@@ -720,7 +981,19 @@ def list_available_canonical_models(json_file=None):
 
 def get_canonical_model(model_name):
   """
-  Get canonical name of model, and grab model parameters
+  Get canonical model name and load model parameters into global variable.
+  
+  Searches Models.json for either an exact match on model name or a match
+  on the alias field. When found, loads parameters into global model_parameters dict.
+  
+  Args:
+      model_name: The model name or alias to look up
+      
+  Returns:
+      Canonical model name if found and available, None otherwise
+      
+  Raises:
+      SystemExit: If Models.json cannot be found or contains invalid JSON
   """
   json_file = f"{PRGDIR}/Models.json"
 
@@ -777,6 +1050,19 @@ def get_canonical_model(model_name):
   return canonical_name
 
 def list_available_canonical_models_with_details(json_file=None):
+  """
+  Get a dictionary of all available models with their complete details.
+  
+  Args:
+      json_file: Path to the Models.json file (default: auto-detected)
+      
+  Returns:
+      Dictionary mapping model names to their complete details for available models
+      
+  Raises:
+      FileNotFoundError: Handled internally, returns empty dict
+      JSONDecodeError: Handled internally, returns empty dict
+  """
   if not json_file:
     json_file = f"{PRGDIR}/Models.json"
   try:
@@ -796,7 +1082,19 @@ def list_available_canonical_models_with_details(json_file=None):
   return available_models
 
 def edit_models_file(filename: str):
-  """Edit Models.json file using the system's default editor or 'p'."""
+  """
+  Edit the Models.json file using the system's default editor or 'p'.
+  
+  Creates a temporary copy of the file, opens it in the editor, validates
+  the JSON syntax, and replaces the original file if valid.
+  
+  Args:
+      filename: Path to the Models.json file to edit
+      
+  Raises:
+      subprocess.CalledProcessError: If the editor fails to launch
+      json.JSONDecodeError: If the edited file contains invalid JSON
+  """
   editor = os.environ.get('EDITOR', 'p').strip()
   # Create a temporary copy of the file
   with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
@@ -878,7 +1176,13 @@ def edit_models_file(filename: str):
 
 def main(**kwargs: Any) -> None:
   """
-  Main entry point for the dejavu2-cli program, handling command-line arguments and executing queries.
+  Main entry point for the dejavu2-cli program.
+  
+  Processes command-line arguments, handles utility commands (like listing templates
+  or editing configuration files), and executes LLM queries with the specified parameters.
+  
+  Args:
+      **kwargs: Command-line arguments parsed by Click
   """
   # Handle special options first
   if kwargs['edit_templates']:

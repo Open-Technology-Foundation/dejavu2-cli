@@ -11,10 +11,10 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 
 ## Features
 
-- **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, and LLaMA models by specifying the model name or using predefined shortcuts.
+- **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, and LLaMA models by specifying the model name or using predefined aliases.
 - **Customizable Parameters**: Fine-tune responses by adjusting parameters like temperature, maximum tokens, and system prompts directly from the command line.
 - **Contextual Inputs**: Enhance queries by including content from reference text files or customKB knowledge bases, allowing for richer and more informed responses.
-- **Template Management**: Utilize user-defined templates in YAML format to initialize query parameters, ensuring consistency and saving time on repetitive tasks.
+- **Template Management**: Utilize user-defined templates in JSON format to initialize query parameters, ensuring consistency and saving time on repetitive tasks.
 - **Configuration Loading**: Automatically load default settings and user-specific configurations from YAML files, with the ability to override them via command-line options.
 - **Listing and Editing Tools**: List available models, templates, and customKB knowledge bases. Edit configuration and template files directly from the command line using your preferred text editor.
 - **Status Display**: Preview the current state of all arguments and options before executing a query to verify and adjust settings as needed.
@@ -56,33 +56,33 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
    pip install -r requirements.txt
    ```
 
-4. **Set Up Configuration**:
+3. **Set Up Environment Variables**:
 
-   - Copy the default configuration to your user config directory:
+   Create environment variables for your API keys:
 
-     ```bash
-     mkdir -p ~/.config/dejavu2-cli
-     cp defaults.yaml ~/.config/dejavu2-cli/config.yaml
-     ```
+   ```bash
+   # Required for Anthropic models (claude-*)
+   export ANTHROPIC_API_KEY="your_anthropic_api_key"
+   
+   # Required for OpenAI models (gpt-*, o1-*, etc.)
+   export OPENAI_API_KEY="your_openai_api_key"
+   
+   # No key needed for local Ollama models (llama-*)
+   # Ensure Ollama server is running locally
+   ```
 
-   - Edit `~/.config/dejavu2-cli/config.yaml` to add your API keys and customize settings.
+   You can add these to your shell profile (`.bashrc`, `.zshrc`, etc.) for persistence.
 
-     **Important**: Replace placeholder API keys with your actual keys from OpenAI and Anthropic.
-
-     ```yaml
-     api_keys:
-       anthropic: "your_anthropic_api_key"
-       openai: "your_openai_api_key"
-     ```
-
-5. **Ensure Ollama Server is Running** (Optional):
+4. **Ensure Ollama Server is Running** (Optional):
 
    - If you plan to use local LLaMA-based models, make sure the [Ollama](https://ollama.ai) server is installed and running.
 
-6. **Run the Script**:
+5. **Run the Script**:
 
    ```bash
-   dv2 "Your query here"
+   ./dejavu2-cli "Your query here"
+   # Or use the shorthand
+   ./dv2 "Your query here"
    ```
 
 ## Usage
@@ -90,13 +90,13 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 Run `dv2` with your query and desired options:
 
 ```bash
-.dv2 "Your query here" [options]
+./dv2 "Your query here" [options]
 ```
 
 To view all available options:
 
 ```bash
-dv2 --help
+./dv2 --help
 ```
 
 ## Command-Line Options
@@ -105,7 +105,7 @@ dv2 --help
   Set the system prompt for the AI assistant (e.g., "You are a helpful assistant.").
 
 - `-m, --model TEXT`  
-  Specify the LLM model to use (e.g., "gpt-4", "claude-2", "llama3.1").
+  Specify the LLM model to use (e.g., "gpt-4o", "claude-3-7-sonnet-latest", "llama3.1"). Aliases like "sonnet" or "gpt4o" can also be used.
 
 - `-t, --temperature FLOAT`  
   Set the sampling temperature for the LLM (e.g., `0.7`); higher values make output more random.
@@ -126,7 +126,7 @@ dv2 --help
   List all available customKB knowledge bases.
 
 - `-T, --template TEXT`  
-  Use a template to initialize arguments (defined in `llm-Templates.yaml`).
+  Use a template to initialize arguments (defined in `Agents.json`).
 
 - `-l, --list-template TEXT`  
   List details of all templates or a specific template.
@@ -135,7 +135,7 @@ dv2 --help
   List the names of all available templates.
 
 - `-E, --edit-templates`  
-  Edit the `llm-Templates.yaml` file using the default editor.
+  Edit the `Agents.json` file using the default editor.
 
 - `-D, --edit-defaults`  
   Edit the `defaults.yaml` configuration file.
@@ -144,20 +144,28 @@ dv2 --help
   Display the current state of all arguments and options.
 
 - `--list-models`  
-  List all available LLM models as defined in `defaults.yaml`.
+  List all available LLM models as defined in the `Models.json` file.
 
 ## Configuration
 
+### Configuration Files
+
+The system uses three main configuration files:
+
+1. **defaults.yaml**: Default settings and paths
+2. **Models.json**: Model definitions and aliases
+3. **Agents.json**: Template definitions
+
 ### defaults.yaml
 
-Contains default settings, model shortcuts, paths, API keys, and logging configurations.
+Contains default settings, paths, and logging configurations.
 
 ```yaml
 # defaults.yaml
 
 # Command line defaults
 defaults:
-  template: Helpful AI
+  template: Dejavu2 # This template, when specified, will override the values below
   systemprompt: You are a friendly and helpful AI Assistant.
   reference: ""
   model: sonnet
@@ -166,60 +174,67 @@ defaults:
   completions: 1
   knowledgebase: ""
 
-# LLM model shortcuts
-model_shortcuts:
-  o1:           "o1-preview-2024-09-12"
-  o1mini:       "o1-mini-2024-09-12"
-  chatgpt:      "chatgpt-4o-latest"
-  opus:         "claude-3-opus-20240229"
-  sonnet:       "claude-3-5-sonnet-20240620"
-  haiku:        "claude-3-haiku-20240307"
-  gpt4o:        "gpt-4o-2024-08-06"
-  gpt4omini:    "gpt-4o-mini"
-  gpt4:         "gpt-4"
-  gpt4turbo:    "gpt-4-turbo"
-  gpt4preview:  "gpt-4-turbo-preview"
-  llama3:       "llama3.1"
-
 # Paths
 paths:
-  prgdir: ""  # Will be set programmatically
-  template_path: llm-Templates.yaml
+  prgdir: ""  # Will be set programmatically at runtime
+  template_path: Agents.json
   customkb: /ai/scripts/customkb/customkb
-
-# API clients
-api_keys:
-  anthropic: "your_anthropic_api_key"
-  openai: "your_openai_api_key"
 
 # Logging
 logging:
-  level: WARNING
+  level: DEBUG
   format: "%(levelname)s: %(message)s"
 
 # Vector database path
 vectordbs_path: /var/lib/vectordbs
 ```
 
-### llm-Templates.yaml
+### Models.json
+
+Defines available models and their aliases. Each model entry contains:
+
+```json
+"claude-3-7-sonnet-latest": {
+  "model": "claude-3-7-sonnet-latest",
+  "alias": "sonnet",
+  "parent": "Anthropic",
+  "model_category": "LLM",
+  "family": "claude3",
+  "series": "claude3",
+  "description": "Highest level of intelligence and capability with toggleable extended thinking",
+  "training_data": "2024-10",
+  "data_cutoff_date": "2024-10",
+  "url": "https://api.anthropic.com/v1",
+  "apikey": "ANTHROPIC_API_KEY",
+  "context_window": 200000,
+  "max_output_tokens": 128000,
+  "token_costs": "$3.00/$15.00",
+  "vision": 1,
+  "available": 9,
+  "enabled": 1
+}
+```
+
+The `alias` field allows you to use shorthand names like "sonnet" instead of the full model name.
+
+### Agents.json
 
 Defines templates for initializing query parameters.
 
-```yaml
-Helpful AI:
-  systemprompt: You are a friendly and helpful AI Assistant.
-  model: sonnet
-  max_tokens: 4000
-  temperature: 0.55
-  knowledgebase: ""
-  monospace: false
+```json
+{
+  "DéjàVu2 - Helpful AI": {
+    "category": "General",
+    "knowledgebase": "",
+    "max_tokens": 4000,
+    "model": "claude-3-5-sonnet-latest", 
+    "monospace": false,
+    "systemprompt": "Your name is DéjàVu2. You are a friendly and helpful general AI assistant.",
+    "temperature": 0.35
+  }
+}
 
-# Add more templates as needed
 ```
-
-### Setting Up Templates Directory
-
-Ensure that `llm-Templates.yaml` is located in the same directory as the script or update the `template_path` in `defaults.yaml` accordingly.
 
 ## Templates
 
@@ -227,20 +242,24 @@ Templates allow you to predefine sets of parameters for common tasks. This is es
 
 ### Example Template Definition
 
-```yaml
-Helpful AI:
-  systemprompt: You are a friendly and helpful AI Assistant.
-  model: sonnet
-  max_tokens: 4000
-  temperature: 0.55
-  knowledgebase: ""
-  monospace: false
+```json
+{
+  "Summariser - Summary Machine": {
+    "category": "Edit-Summarize",
+    "knowledgebase": "",
+    "max_tokens": 8000,
+    "model": "claude-3-5-sonnet-latest",
+    "monospace": false,
+    "systemprompt": "You are a summarization machine. Summarize the key points of the user's text in a concise and insightful manner.",
+    "temperature": 0.3
+  }
+}
 ```
 
 ### Using a Template
 
 ```bash
-dv2 "Explain quantum computing in simple terms." -T "Helpful AI"
+./dv2 "Explain quantum computing in simple terms." -T "DéjàVu2 - Helpful AI"
 ```
 
 ## Examples
@@ -248,49 +267,47 @@ dv2 "Explain quantum computing in simple terms." -T "Helpful AI"
 ### Basic Query
 
 ```bash
-dv2 "What is the capital of France?"
+./dv2 "What is the capital of France?"
 ```
 
 ### Using a Template
 
 ```bash
-dv2 "Provide a summary of the latest news." -T "Summarize - Expert Summariser"
+./dv2 "Provide a summary of the latest news." -T "Summariser - Summary Machine"
 ```
 
 ### Specifying a Model and Adjusting Temperature
 
 ```bash
-dv2 "Generate a creative story about a flying car." -m gpt4o -t 0.9
+./dv2 "Generate a creative story about a flying car." -m gpt4o -t 0.9
 ```
 
 ### Including Reference Files
 
 ```bash
-dv2 "Analyze the following code." -r "script.py,helpers.py"
+./dv2 "Analyze the following code." -r "script.py,helpers.py"
 ```
 
 ### Querying with a Knowledge Base
 
 ```bash
-dv2 "Explain the company's financial position." -k "financial_reports"
+./dv2 "Explain the company's financial position." -k "financial_reports"
 ```
 
 ### Listing Available Models
 
 ```bash
-dv2 --list-models
+./dv2 --list-models
 ```
 
 ### Editing Templates
 
 ```bash
-dv2 --edit-templates
+./dv2 --edit-templates
 ```
 
 ### Viewing Status
 
 ```bash
-dv2 "Your query here" --status
+./dv2 "Your query here" --status
 ```
-
-
