@@ -1,7 +1,7 @@
 # dejavu2-cli 
 
 A powerful command-line interface for interacting with various 
-Large Language Models (LLMs).
+Large Language Models (LLMs) including OpenAI, Anthropic Claude, Google Gemini, and local models via Ollama.
 
 ## Overview
 
@@ -18,6 +18,7 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 - **Configuration Loading**: Automatically load default settings and user-specific configurations from YAML files, with the ability to override them via command-line options.
 - **Listing and Editing Tools**: List available models, templates, and customKB knowledge bases. Edit configuration and template files directly from the command line using your preferred text editor.
 - **Status Display**: Preview the current state of all arguments and options before executing a query to verify and adjust settings as needed.
+- **Model-Specific Parameter Handling**: Automatically adjusts parameters for different model types (like OpenAI's O1/O3 models) to ensure compatibility.
 
 ## Table of Contents
 
@@ -64,14 +65,29 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
    # Required for Anthropic models (claude-*)
    export ANTHROPIC_API_KEY="your_anthropic_api_key"
    
-   # Required for OpenAI models (gpt-*, o1-*, etc.)
+   # Required for OpenAI models (gpt-*, o1-*, o3-*, etc.)
    export OPENAI_API_KEY="your_openai_api_key"
+   
+   # Required for Google/Gemini models (gemini-*)
+   export GOOGLE_API_KEY="your_google_api_key"
    
    # No key needed for local Ollama models (llama-*)
    # Ensure Ollama server is running locally
    ```
 
    You can add these to your shell profile (`.bashrc`, `.zshrc`, etc.) for persistence.
+   
+   **Important**: Never store API keys in code or configuration files for security reasons.
+   
+   ### Special Note on Model Handling
+
+   Models in different categories may have specific requirements or behaviors:
+
+   - **OpenAI Models** (gpt-3.5-turbo, gpt-4, etc.): Standard approach with system and user prompts.
+   - **OpenAI O1/O3 Models**: Use a different messaging format and require special parameter handling (`max_completion_tokens` instead of `max_tokens`; no temperature parameter).
+   - **Claude Models**: Similar to OpenAI but with some differences in prompt handling.
+   - **Google/Gemini Models**: Requires Google API key and uses a different client library.
+   - **Local Models via Ollama**: Requires the Ollama server to be running locally on port 11434.
 
 4. **Ensure Ollama Server is Running** (Optional):
 
@@ -101,17 +117,27 @@ To view all available options:
 
 ## Command-Line Options
 
-- `-s, --systemprompt TEXT`  
-  Set the system prompt for the AI assistant (e.g., "You are a helpful assistant.").
+### Main Options
+
+- `-V, --version`  
+  Show version information and exit.
+
+- `-T, --template TEXT`  
+  Use a template to initialize arguments (defined in `Agents.json`).
 
 - `-m, --model TEXT`  
   Specify the LLM model to use (e.g., "gpt-4o", "claude-3-7-sonnet-latest", "llama3.1"). Aliases like "sonnet" or "gpt4o" can also be used.
+
+- `-s, --systemprompt TEXT`  
+  Set the system prompt for the AI assistant (e.g., "You are a helpful assistant.").
 
 - `-t, --temperature FLOAT`  
   Set the sampling temperature for the LLM (e.g., `0.7`); higher values make output more random.
 
 - `-M, --max-tokens INTEGER`  
   Define the maximum number of tokens for the LLM to generate.
+
+### Context Options
 
 - `-r, --reference TEXT`  
   Include content from reference text files as context (comma-separated list of file paths).
@@ -122,11 +148,21 @@ To view all available options:
 - `-Q, --knowledgebase-query TEXT`  
   Define a query to send to the customKB knowledge base (defaults to the main query if not provided).
 
-- `-K, --list-knowledge-bases`  
-  List all available customKB knowledge bases.
+### Status and Information
 
-- `-T, --template TEXT`  
-  Use a template to initialize arguments (defined in `Agents.json`).
+- `-S, --status`  
+  Display the current state of all arguments and options.
+
+- `-P, --print-systemprompt`  
+  Print the full system prompt when using `--status`.
+
+### Listing Options
+
+- `-a, --list-models`  
+  List all available LLM models as defined in the `Models.json` file.
+
+- `-A, --list-models-details`  
+  List all available models with detailed information.
 
 - `-l, --list-template TEXT`  
   List details of all templates or a specific template.
@@ -134,17 +170,30 @@ To view all available options:
 - `-L, --list-template-names`  
   List the names of all available templates.
 
+- `-K, --list-knowledge-bases`  
+  List all available customKB knowledge bases.
+
+### Editing Options
+
 - `-E, --edit-templates`  
-  Edit the `Agents.json` file using the default editor.
+  Edit the `Agents.json` file using the default editor or 'p'.
 
 - `-D, --edit-defaults`  
   Edit the `defaults.yaml` configuration file.
+  
+- `-d, --edit-models`  
+  Edit the `Models.json` file.
 
-- `-S, --status`  
-  Display the current state of all arguments and options.
+### Output Options
 
-- `--list-models`  
-  List all available LLM models as defined in the `Models.json` file.
+- `-p, --project-name TEXT`  
+  The project name for recording conversations.
+
+- `-o, --output-dir TEXT`  
+  Directory to output conversation results to.
+
+- `-g, --message <TEXT TEXT>...`  
+  Add message pairs in the form: `-g role "message"` (e.g., `-g user "hello" -g assistant "hi"`).
 
 ## Configuration
 
@@ -294,20 +343,56 @@ Templates allow you to predefine sets of parameters for common tasks. This is es
 ./dv2 "Explain the company's financial position." -k "financial_reports"
 ```
 
-### Listing Available Models
+### Displaying Full Status Information
 
 ```bash
+./dv2 "Your query here" --status -P
+```
+
+### Listing All Available Information
+
+```bash
+# List models with basic information
 ./dv2 --list-models
+
+# List models with detailed information
+./dv2 -A
+
+# List all templates
+./dv2 -l all
+
+# List template names only (concise)
+./dv2 -L
+
+# List available knowledge bases
+./dv2 -K
 ```
 
-### Editing Templates
+### Editing Configuration Files
 
 ```bash
-./dv2 --edit-templates
+# Edit templates file
+./dv2 -E
+
+# Edit defaults configuration
+./dv2 -D
+
+# Edit models configuration
+./dv2 -d
 ```
 
-### Viewing Status
+### Using Different Model Types
 
 ```bash
-./dv2 "Your query here" --status
+# Using OpenAI GPT-4o model
+./dv2 "Explain quantum physics" -m gpt4o
+
+# Using Anthropic Claude model
+./dv2 "Write a poem about nature" -m sonnet
+
+# Using OpenAI o1-preview model
+./dv2 "Analyze this data" -m o1-preview
+
+# Using local Ollama model (with Ollama server running)
+./dv2 "Translate to French" -m llama3
 ```

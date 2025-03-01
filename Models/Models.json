@@ -93,7 +93,7 @@
   },
   "o1-preview-2024-09-12": {
     "model": "o1-preview-2024-09-12",
-    "alias": "o1-preview",
+    "alias": "o1-preview-20240912",
     "parent": "OpenAI",
     "model_category": "LLM",
     "family": "gpt4",
@@ -530,24 +530,6 @@
     "max_output_tokens": null,
     "token_costs": "",
     "output_dimension": 1536,
-    "available": 9,
-    "enabled": 9
-  },
-  "omni-moderation-latest": {
-    "model": "omni-moderation-latest",
-    "alias": "omnimoderationlatest",
-    "parent": "OpenAI",
-    "model_category": "moderation",
-    "family": "omni",
-    "series": "omni",
-    "description": "Currently points to omni-moderation-2024-09-26.",
-    "training_data": null,
-    "data_cutoff_date": null,
-    "url": "https://api.openai.com/v1",
-    "apikey": "OPENAI_API_KEY",
-    "context_window": 32768,
-    "max_output_tokens": null,
-    "token_costs": "",
     "available": 9,
     "enabled": 9
   },

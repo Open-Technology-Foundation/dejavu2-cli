@@ -103,6 +103,7 @@ Authentication:
 API keys must be set as environment variables:
 - ANTHROPIC_API_KEY: For Claude models
 - OPENAI_API_KEY: For OpenAI models (GPT, O1, etc.)
+- GOOGLE_API_KEY: For Gemini models
 - No API key needed for local Ollama models
 
 Configuration Files:
@@ -199,7 +200,7 @@ try:
   from version import __version__ as VERSION
 except ImportError:
   VERSION = 'unknown'
-  print("Warning: Could not import version.py module. Version will be set to 'unknown'.")
+  click.echo("Warning: version.py not found. Using 'unknown'.", err=True)
 SCRIPT_NAME = os.path.splitext(os.path.basename(__file__))[0]
 DEFAULT_CONFIG_PATH = os.path.join(PRGDIR, 'defaults.yaml')
 USER_CONFIG_PATH = os.path.expanduser('~/.config/dejavu2-cli/config.yaml')
@@ -240,7 +241,7 @@ multi_char_replacements = {
 }
 ps_html_entity_re = re.compile(r'&[^ \t]*;')
 ps_non_alnum_re = re.compile(r'[^a-zA-Z0-9]+')
-ps_quotes_re = re.compile(r"[\"'`’´]")
+ps_quotes_re = re.compile(r"[\"'`'´]")
 def post_slug(input_str: str, sep_char: str = '-',
     preserve_case: bool = False, max_len: int = 0) -> str:
   """
@@ -283,10 +284,10 @@ def load_config() -> Dict[str, Any]:
       config = yaml.safe_load(f) or {}
       config['config_file'] = DEFAULT_CONFIG_PATH
   except FileNotFoundError:
-    logger.error(f"Default config file not found: {DEFAULT_CONFIG_PATH}")
+    click.echo(f"Config not found: {DEFAULT_CONFIG_PATH}", err=True)
     sys.exit(1)
   except yaml.YAMLError as e:
-    logger.error(f"Error parsing default config: {e}")
+    click.echo(f"Invalid config: {e}", err=True)
     sys.exit(1)
 
   # Update with user configuration if it exists
@@ -297,14 +298,14 @@ def load_config() -> Dict[str, Any]:
         config.update(user_config)
         config['config_file'] = USER_CONFIG_PATH
     except yaml.YAMLError as e:
-      logger.error(f"Error parsing user config: {e}")
+      click.echo(f"Invalid user config: {e}", err=True)
       sys.exit(1)
 
   # Validate required keys
   required_keys = ['paths', 'defaults']
   for key in required_keys:
     if key not in config:
-      logger.error(f"Missing required config key: {key}")
+      click.echo(f"Required key missing: {key}", err=True)
       sys.exit(1)
 
   # Ensure API keys section exists even if not in config
@@ -370,19 +371,27 @@ logging.basicConfig(level=logging.ERROR)
 # Initialize API clients
 # Get API keys from environment variables only
 anthropic_api_key = os.environ.get('ANTHROPIC_API_KEY', '')
-if not anthropic_api_key:
-  logger.warning("No Anthropic API key found. Set ANTHROPIC_API_KEY environment variable.")
-
 openai_api_key = os.environ.get('OPENAI_API_KEY', '')
-if not openai_api_key:
-  logger.warning("No OpenAI API key found. Set OPENAI_API_KEY environment variable.")
+google_api_key = os.environ.get('GOOGLE_API_KEY', '')
 
-anthropic_client = Anthropic(api_key=anthropic_api_key)
-anthropic_client.beta_headers = {
-  "anthropic-beta": "output-128k-2025-02-19"
-}
-#  "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
-openai_client = OpenAI(api_key=openai_api_key)
+# Create clients for various API providers
+try:
+  anthropic_client = Anthropic(api_key=anthropic_api_key)
+  # Use a single consistent beta header
+  anthropic_client.beta_headers = {
+    "anthropic-beta": "output-128k-2025-02-19"
+  }
+except Exception as e:
+  click.echo(f"Anthropic client error: {e}", err=True)
+  anthropic_client = None
+
+try:
+  openai_client = OpenAI(api_key=openai_api_key)
+except Exception as e:
+  click.echo(f"OpenAI client error: {e}", err=True)
+  openai_client = None
+
+# Local Ollama client doesn't require API key validation
 llama_client = OpenAI(base_url='http://localhost:11434/v1', api_key='ollama')
 
 def query(query_text: str, systemprompt: str, messages:list, model: str, temperature: float, max_tokens: int) -> str:
@@ -440,21 +449,42 @@ def query_gemini(query: str, system: str, model: str, temperature, max_tokens) -
       ValueError: For invalid parameters
       Exception: If the API request fails
   """
+  # Check if Google API key is set
+  if not google_api_key:
+    raise ValueError("Missing Google API key. Set GOOGLE_API_KEY environment variable.")
+    
   try:
+    # Configure the Gemini API with the key
+    genai.configure(api_key=google_api_key)
+    
+    # Create generation config
     gen_config = genai.types.GenerationConfig(
       temperature=temperature,
       max_output_tokens=max_tokens,
     )
-    prompt = f"<system>\n{system}\n</system>\n\n{query}"
+    
+    # Format prompt according to Gemini's requirements
+    prompt = f"<s>\n{system}\n</s>\n\n{query}"
+    
+    # Create and call model
     model_obj = genai.GenerativeModel(model, generation_config=gen_config)
     response = model_obj.generate_content(prompt)
+    
+    # Check if we got a valid response
     if response and response.text:
       return response.text
     raise Exception(f"Model {model} is not supported or did not return a result.")
   except ValueError as ve:
+    # Handle validation errors from the API
+    if "api_key" in str(ve).lower():
+      raise ValueError(f"Invalid Google API key: {ve}")
     raise ve
   except Exception as e:
-    print(f"Error querying {model}: {e}", file=sys.stderr)
+    # Log error and provide useful information
+    error_msg = f"{model} query failed: {e}"
+    click.echo(error_msg, err=True)
+    if "authentication" in str(e).lower():
+      raise ValueError(f"{model}: Invalid/expired API key")
     raise
 
 def get_available_gemini_models():
@@ -480,7 +510,7 @@ def get_available_gemini_models():
     ]
     return text_models
   except Exception as e:
-    print(f"Error listing models: {e}", file=sys.stderr)
+    click.echo(f"Cannot list models: {e}", err=True)
     return []
 
 # llama -------------------------------------------------------------------------------
@@ -517,9 +547,9 @@ def query_llama(query_text: str, systemprompt: str, model: str, temperature: flo
   except Exception as e:
     # Provide more helpful error message for common Ollama connection issues
     if "connection refused" in str(e).lower():
-      logger.error(f"Connection to Ollama server failed. Make sure Ollama is running on localhost:11434.")
+      click.echo(f"Ollama server not running on localhost:11434", err=True)
     else:
-      logger.error(f"Error querying {model}: {e}")
+      click.echo(f"{model} query failed: {e}", err=True)
     raise
 
 # openai -------------------------------------------------------------------------------
@@ -538,17 +568,22 @@ def query_openai(query: str, system: str, model: str, temperature: float, max_to
       The model's response as a string
       
   Raises:
-      ValueError: If the OpenAI API key is missing
+      ValueError: If the OpenAI API key is missing or invalid
       Exception: If the API request fails
   """
-  #logger.warning(f'Q1: {model=} {temperature=} {max_tokens=} {query=} {system=}')
+  logger.debug(f'OpenAI query: model={model}, temperature={temperature}, max_tokens={max_tokens}')
   try:
-    # Check if we have a valid API key
+    # Check if we have a valid API key and client
     if not openai_api_key:
       raise ValueError("Missing OpenAI API key. Set OPENAI_API_KEY environment variable.")
+    
+    if openai_client is None:
+      raise ValueError("OpenAI client initialization failed. Check API key validity.")
       
-    # o1* Models
+    # o1* Models and o3* models - different prompt format and parameters
     if model.startswith(('o1', 'o3')):
+      # o1 and o3 models use max_completion_tokens instead of max_tokens
+      # and don't accept temperature parameter
       response = openai_client.chat.completions.create(
       model=model,
       messages=[
@@ -556,8 +591,9 @@ def query_openai(query: str, system: str, model: str, temperature: float, max_to
         { "role": "assistant", "content": "I have read and I understand this." },
         { "role": "user", "content": query }
       ],
+      max_completion_tokens=max_tokens,
       )
-    # *gpt* Models
+    # *gpt* Models - standard format
     else:
       response = openai_client.chat.completions.create(
       model=model,
@@ -572,6 +608,8 @@ def query_openai(query: str, system: str, model: str, temperature: float, max_to
     return response.choices[0].message.content
   except Exception as e:
     logger.error(f"Error querying {model}: {e}")
+    if "invalid_api_key" in str(e).lower() or "authentication" in str(e).lower():
+      raise ValueError(f"Authentication error for {model}: Invalid or expired OpenAI API key")
     raise
 
 # anthropic -------------------------------------------------------------------------------
@@ -593,25 +631,32 @@ def query_anthropic(query_text: str, systemprompt: str, model: str, temperature:
       ValueError: If the Anthropic API key is missing
       Exception: If the API request fails
   """
-  beta_headers = {
-    "anthropic-beta": "max-tokens-3-5-sonnet-2024-07-15"
-  }
   try:
     # Check if we have a valid API key
     if not anthropic_api_key:
-      raise ValueError("Missing Anthropic API key. Set ANTHROPIC_API_KEY environment variable.")
+      raise ValueError("Set ANTHROPIC_API_KEY environment variable")
+    
+    if anthropic_client is None:
+      raise ValueError("Anthropic client failed. Check API key")
       
+    # Prepare extra headers - ensure they match beta_headers set on the client
+    extra_headers = {
+      "anthropic-beta": "output-128k-2025-02-19"
+    }
+    
     message = anthropic_client.messages.create(
       max_tokens=max_tokens,
       messages=[{"role": "user", "content": query_text}],
       model=model,
       system=systemprompt,
       temperature=temperature,
-      extra_headers=beta_headers
+      extra_headers=extra_headers,
     )
     return message.content[0].text
   except Exception as e:
-    logger.error(f"Error querying {model}: {e}")
+    click.echo(f"{model} query failed: {e}", err=True)
+    if "invalid_api_key" in str(e).lower() or "authentication" in str(e).lower():
+      raise ValueError(f"{model}: Invalid/expired API key")
     raise
 
 
@@ -646,10 +691,10 @@ def get_reference_string(reference: str) -> str:
 
       reference_string += f'<reference name="{base_name}">\n{reference_content}\n</reference>\n\n'
     except FileNotFoundError:
-      logger.error(f"Reference file '{file_name}' not found.")
+      click.echo(f"File not found: '{file_name}'", err=True)
       raise
     except IOError as e:
-      logger.error(f"Error reading reference file '{file_name}': {e}")
+      click.echo(f"Cannot read '{file_name}': {e}", err=True)
       raise
   return reference_string
 
@@ -674,21 +719,58 @@ def get_knowledgebase_string(knowledgebase: str, knowledgebase_query: str) -> st
   """
   if not knowledgebase:
     return ''
-  knowledgebase = f"{knowledgebase}.cfg" if not knowledgebase.endswith('.cfg') else knowledgebase
-  # Search for the knowledgebase file
+    
+  # Handle various knowledgebase path formats
+  if not knowledgebase.endswith('.cfg'):
+    # Could be a simple name, a relative path or a structured path
+    if '/' in knowledgebase:
+      # Path-like format (e.g., "okusi/okusiassociates")
+      # This is already handled in the calling code to create full path
+      pass
+    else:
+      # Simple name without path, append .cfg
+      knowledgebase = f"{knowledgebase}.cfg"
+      
+  # Search for the knowledgebase file if it doesn't exist directly
   if not os.path.exists(knowledgebase):
-    search_pattern = os.path.join(VECTORDBS_PATH, '**', knowledgebase)
+    # Try with VECTORDBS_PATH environment variable if set
+    vectordbs_env = os.environ.get('VECTORDBS', VECTORDBS_PATH)
+    search_pattern = os.path.join(vectordbs_env, '**', os.path.basename(knowledgebase))
     matches = glob(search_pattern, recursive=True)
     if matches:
       knowledgebase = matches[0]
     else:
-      logger.error(f"Knowledgebase file '{knowledgebase}' not found in {VECTORDBS_PATH}")
-      raise FileNotFoundError(f"Knowledgebase file '{knowledgebase}' not found")
+      # Fallback to default path
+      search_pattern = os.path.join(VECTORDBS_PATH, '**', os.path.basename(knowledgebase))
+      matches = glob(search_pattern, recursive=True)
+      if matches:
+        knowledgebase = matches[0]
+      else:
+        logger.error(f"Knowledgebase file '{knowledgebase}' not found in {VECTORDBS_PATH}")
+        raise FileNotFoundError(f"Knowledgebase file '{knowledgebase}' not found")
 
   try:
+    # Set environment variables for the subprocess
+    env = os.environ.copy()
+    
+    # Debugging info only shown at higher log levels
+    if logger.level <= logging.DEBUG:
+      # Print API key info for debugging
+      logger.debug(f"Current OpenAI API key: {openai_api_key[:10]}...{openai_api_key[-4:]}")
+      logger.debug(f"Env OpenAI API key: {os.environ.get('OPENAI_API_KEY', 'NOT SET')[:10]}...{os.environ.get('OPENAI_API_KEY', 'NOT SET')[-4:] if len(os.environ.get('OPENAI_API_KEY', 'NOT SET')) > 14 else ''}")
+    
+    # Make sure we pass the current API keys to the subprocess
+    # This ensures we're using the most up-to-date keys from the environment
+    logger.info(f"Running customkb query with: {CUSTOMKB_EXECUTABLE} query {knowledgebase} {knowledgebase_query} --context")
+    
+    # Explicitly set API keys in the environment for subprocess
+    env['OPENAI_API_KEY'] = openai_api_key
+    env['ANTHROPIC_API_KEY'] = anthropic_api_key
+    env['GOOGLE_API_KEY'] = google_api_key
+    
     result = subprocess.run(
       [CUSTOMKB_EXECUTABLE, 'query', knowledgebase, knowledgebase_query, '--context'],
-      capture_output=True, text=True, check=True
+      capture_output=True, text=True, check=True, env=env
     )
     return f'<knowledgebase>\n{result.stdout.strip()}\n</knowledgebase>\n\n'
   except subprocess.CalledProcessError as e:
@@ -741,6 +823,112 @@ def edit_yaml_file(filename: str):
 
 
 #===============================================================================
+def display_status(kwargs, query_texts, config, model_parameters, print_full_systemprompt=False):
+  """
+  Display comprehensive status information about the current configuration and settings.
+  
+  Args:
+      kwargs: Command-line arguments dictionary
+      query_texts: List of query texts
+      config: Configuration dictionary
+      model_parameters: Model parameters dictionary
+      print_full_systemprompt: Whether to print the full system prompt regardless of length
+  """
+  kwargs['systemprompt'] = kwargs['systemprompt'].strip()
+  
+  # Section 1: Configuration
+  click.echo("\n=== CONFIGURATION ===")
+  if 'config_file' in config:
+    click.echo(f"Config File: {config['config_file']}")
+  click.echo(f"Template: {kwargs['template']}")
+  
+  # Section 2: Model Information
+  click.echo("\n=== MODEL INFORMATION ===")
+  click.echo(f"Selected Model/Alias: {kwargs['model']}")
+  canonical_model = model_parameters.get('model', 'Unknown')
+  click.echo(f"Canonical Model: {canonical_model}")
+  click.echo(f"Provider: {model_parameters.get('parent', 'Unknown')}")
+  click.echo(f"Family: {model_parameters.get('family', 'Unknown')}")
+  click.echo(f"Context Window: {model_parameters.get('context_window', 'Unknown')}")
+  click.echo(f"Max Output Tokens: {model_parameters.get('max_output_tokens', 'Unknown')}")
+  
+  # Section 3: API Status
+  click.echo("\n=== API STATUS ===")
+  api_key_type = model_parameters.get('apikey', 'Unknown')
+  if api_key_type == 'OPENAI_API_KEY':
+    api_status = "Initialized" if openai_client else "Not initialized"
+    click.echo(f"OpenAI API: {api_status} (Key: {'Present' if openai_api_key else 'Missing'})")
+  elif api_key_type == 'ANTHROPIC_API_KEY':
+    api_status = "Initialized" if anthropic_client else "Not initialized"
+    click.echo(f"Anthropic API: {api_status} (Key: {'Present' if anthropic_api_key else 'Missing'})")
+  elif api_key_type == 'GOOGLE_API_KEY':
+    click.echo(f"Google API: Key {'Present' if google_api_key else 'Missing'}")
+  else:
+    click.echo(f"API Type: {api_key_type}")
+  
+  # Section 4: Query Parameters
+  click.echo("\n=== QUERY PARAMETERS ===")
+  click.echo(f"Temperature: {kwargs['temperature']}")
+  click.echo(f"Max Tokens: {kwargs['max_tokens']}")
+  click.echo(f"Reference Files: {kwargs['reference'] if kwargs['reference'] else 'None'}")
+  click.echo(f"Knowledge Base: {kwargs['knowledgebase'] if kwargs['knowledgebase'] else 'None'}")
+  
+  # Section 5: Query Content
+  click.echo("\n=== QUERY CONTENT ===")
+  
+  # Handle system prompt length intelligently
+  system_prompt = kwargs['systemprompt']
+  prompt_lines = system_prompt.split('\n')
+  prompt_length = len(prompt_lines)
+  
+  if print_full_systemprompt or prompt_length <= 10:
+    # Show full prompt if requested or if it's short
+    click.echo(f"System Prompt: '''\n{system_prompt}\n'''")
+  else:
+    # Show truncated version for long prompts
+    preview_lines = prompt_lines[:3]
+    preview_text = '\n'.join(preview_lines)
+    chars_total = len(system_prompt)
+    lines_hidden = prompt_length - 6  # We show 3 at start and 3 at end
+    
+    # Calculate size of hidden content
+    if lines_hidden > 0:
+      chars_hidden = len('\n'.join(prompt_lines[3:-3]))
+      hidden_msg = f"[... {lines_hidden} lines ({chars_hidden} chars) hidden ...]"
+      end_lines = '\n'.join(prompt_lines[-3:])
+    else:
+      hidden_msg = ""
+      end_lines = ""
+    
+    click.echo(f"System Prompt: (long: {prompt_length} lines, {chars_total} chars) '''\n{preview_text}\n{hidden_msg}\n{end_lines}\n'''")
+    click.echo(f"Use --print-systemprompt to see full system prompt")
+  
+  # Handle query display
+  formatted_queries = [qt.strip() for qt in query_texts]
+  if len(formatted_queries) == 1 and len(formatted_queries[0]) > 500:
+    # Truncate very long queries
+    query_preview = formatted_queries[0][:500]
+    click.echo(f"Query: (truncated, {len(formatted_queries[0])} chars) '''\n{query_preview}...\n'''")
+  else:
+    click.echo(f"Query: '''\n{formatted_queries}\n'''")
+  
+  # Show other parameters
+  other_params = []
+  skip_keys = {'systemprompt', 'query_text', 'status', 'list_template', 'list_template_names', 
+               'list_models', 'list_knowledge_bases', 'edit_defaults', 'edit_templates', 
+               'edit_models', 'list_models_details', 'model', 'temperature', 'max_tokens', 
+               'reference', 'knowledgebase', 'template'}
+  
+  for key, value in kwargs.items():
+    if key not in skip_keys:
+      other_params.append((key, value))
+  
+  if other_params:
+    click.echo("\n=== OTHER PARAMETERS ===")
+    for key, value in other_params:
+      click.echo(f"{key}: {value if value else 'None'}")
+
+
 def list_knowledge_bases(vectordbs_path: str):
   """
   List all available knowledge bases in the specified directory.
@@ -774,11 +962,11 @@ def list_knowledge_bases(vectordbs_path: str):
   if knowledge_bases:
     sorted_kb_names = sorted([os.path.splitext(os.path.basename(kb))[0]
                             for kb in knowledge_bases])
-    print("Available Knowledge Bases:")
+    click.echo("Available Knowledge Bases:")
     for kb in sorted_kb_names:
-      print(f"  {kb}")
+      click.echo(f"  {kb}")
   else:
-    print("No knowledgebases found.")
+    click.echo("No knowledgebases found.")
 
   return list(knowledge_bases)
 
@@ -853,13 +1041,13 @@ def print_template(name: str, data: Dict[str, Any]) -> None:
       name: Name of the template
       data: Dictionary containing the template's properties
   """
-  print(f"Template: {name}")
+  click.echo(f"Template: {name}")
   for key, value in data.items():
     if key == 'systemprompt':
-      print(f'  {key}: """\n{value}\n"""')
+      click.echo(f'  {key}: """\n{value}\n"""')
     elif key != 'monospace':
-      print(f"  {key}: {value}")
-  print()
+      click.echo(f"  {key}: {value}")
+  click.echo()
 
 def list_template_names():
   """
@@ -1028,11 +1216,13 @@ def get_canonical_model(model_name):
 
   if not canonical_name:
     # Model name not found
-    click.echo(f"Model '{model_name}' not found.", err=True)
     return canonical_name
 
   global model_parameters
-  # Initialize `model_params` from Models.json
+  # Initialize `model_params` from Models.json - include all model information
+  model_info = models.get(canonical_name, {})
+  
+  # Essential fields that must be present
   required_fields = [
     'model',
     'series',
@@ -1043,9 +1233,15 @@ def get_canonical_model(model_name):
     'available',
     'enabled'
   ]
-  model_info = models.get(canonical_name, {})
+  
+  # Copy all model info to model_parameters
+  for field, value in model_info.items():
+    model_parameters[field] = value
+  
+  # Verify required fields exist (set to None if missing)
   for field in required_fields:
-    model_parameters[field] = model_info.get(field)
+    if field not in model_parameters:
+      model_parameters[field] = None
 
   return canonical_name
 
@@ -1114,8 +1310,8 @@ def edit_models_file(filename: str):
     except subprocess.CalledProcessError:
       click.echo(f"Error: Failed to edit {filename}", err=True)
       break
-    except yaml.YAMLError as e:
-      click.echo(f"Error: Invalid YAML in edited file.\nDetails: {e}", err=True)
+    except json.JSONDecodeError as e:
+      click.echo(f"Error: Invalid JSON in edited file.\nDetails: {e}", err=True)
       if not click.confirm("Do you want to re-edit the file?"):
         click.echo("Changes discarded.")
         break
@@ -1123,14 +1319,15 @@ def edit_models_file(filename: str):
 # MAIN ===============================================================================
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.argument('query_text', nargs=-1, required=False)
-@click.version_option(version=VERSION, prog_name='dejavu2-cli')
-@click.option('-p', '--project-name', default=None,
-        help='The project name for recording conversations (eg, -p "bali_market")')
+@click.option('-V', '--version', is_flag=True, callback=lambda ctx, param, value: click.echo(f"dejavu2-cli v{VERSION}") or ctx.exit() if value else None,
+        help='Show version and exit', is_eager=True)
 
-@click.option('-s', '--systemprompt', default=None,
-        help='The system role for the AI assistant (eg, "You are a helpful assistant.")')
+@click.option('-T', '--template', default=None,
+        help='The template name to initialize arguments from (eg, "Helpful_AI")')
 @click.option('-m', '--model', default=None,
         help='The LLM model to use (eg, "gpt-4")')
+@click.option('-s', '--systemprompt', default=None,
+        help='The system role for the AI assistant (eg, "You are a helpful assistant.")')
 @click.option('-t', '--temperature', type=float, default=None,
         help='The sampling temperature for the LLM (eg, 0.7)')
 @click.option('-M', '--max-tokens', type=int, default=None,
@@ -1138,39 +1335,38 @@ def edit_models_file(filename: str):
 
 @click.option('-r', '--reference', default=None,
         help='A comma-delimited list of text files for inclusion as context before the query')
-
 @click.option('-k', '--knowledgebase', default=None,
         help='The knowledge base for the query (eg, "my_knowledge_base")')
 @click.option('-Q', '--knowledgebase-query', default=None,
         help='Query to be sent to the knowledge base instead of the command-line query')
-@click.option('-K', '--list-knowledge-bases', is_flag=True, default=False,
-        help='List all available knowledge bases')
-
-@click.option('-T', '--template', default=None,
-        help='The template name to initialize arguments from (eg, "Helpful_AI")')
-@click.option('-l', '--list-template', default=None,
-        help='List all templates, or a specific template (eg, "all" or "Helpful_AI")')
-@click.option('-L', '--list-template-names', is_flag=True, default=False,
-        help='List the templates, without the systemprompt')
-@click.option('-E', '--edit-templates', is_flag=True, default=False,
-        help='Edit llm-Templates.yaml file')
-
-@click.option('-D', '--edit-defaults', is_flag=True, default=False,
-        help='Edit defaults.yaml file')
 
 @click.option('-S', '--status', is_flag=True, default=False,
         help='Display the state of all arguments and exit')
+@click.option('-P', '--print-systemprompt', is_flag=True, default=False,
+        help='Print the full system prompt when using --status')
 
 @click.option('-a', '--list-models', is_flag=True, default=False,
         help='List all available models from Models.json')
 @click.option('-A', '--list-models-details', is_flag=True, default=False,
         help='List all available models from Models.json, and display all elements')
+@click.option('-l', '--list-template', default=None,
+        help='List all templates, or a specific template (eg, "all" or "Helpful_AI")')
+@click.option('-L', '--list-template-names', is_flag=True, default=False,
+        help='List the templates, without the systemprompt')
+@click.option('-K', '--list-knowledge-bases', is_flag=True, default=False,
+        help='List all available knowledge bases')
+
+@click.option('-E', '--edit-templates', is_flag=True, default=False,
+        help='Edit Agents.json file')
+@click.option('-D', '--edit-defaults', is_flag=True, default=False,
+        help='Edit defaults.yaml file')
 @click.option('-d', '--edit-models', is_flag=True, default=False,
         help='Edit Models.json')
 
+@click.option('-p', '--project-name', default=None,
+        help='The project name for recording conversations (eg, -p "bali_market")')
 @click.option('-o', '--output-dir', default=None,
-              help='Directory to output results to (eg, "/tmp/myfiles")')
-
+        help='Directory to output results to (eg, "/tmp/myfiles")')
 @click.option('-g', '--message', type=(str, str), multiple=True,
         help='Add message pairs in the form: -g role "message" (eg, -g user "hello" -g assistant "hi")')
 
@@ -1207,8 +1403,8 @@ def main(**kwargs: Any) -> None:
   if kwargs['list_models_details']:
     list_models(True)
     return
-  if kwargs['edit_models']:
-    edit_models(False)
+  if kwargs.get('edit_models'):
+    edit_models_file(f"{PRGDIR}/Models.json")
     return
 
   if kwargs['list_knowledge_bases']:
@@ -1279,16 +1475,11 @@ def main(**kwargs: Any) -> None:
 #    click.echo(f"  {key}: {value}", err=True)
 #  click.echo(f"{model_parameters['max_output_tokens']=}")
 
+  # Handle either the long form or short form of print_systemprompt flag
+  show_full_systemprompt = kwargs.get('print_systemprompt', False)
+  
   if kwargs['status']:
-    kwargs['systemprompt'] = kwargs['systemprompt'].strip()
-    if 'config_file' in config:
-      click.echo(f"Config File: {config['config_file']}")
-    click.echo(f"systemprompt: '''\n{kwargs['systemprompt']}\n'''")
-    query_texts = [qt.strip() for qt in query_texts]
-    click.echo(f"query_texts: '''\n{query_texts}\n'''")
-    for key, value in kwargs.items():
-      if key not in {'systemprompt', 'query_text', 'status', 'list_template', 'list_template_names', 'list_models', 'list_knowledge_bases', 'edit_defaults', 'edit_templates', 'edit_models', 'list_models_details'}:
-        click.echo(f"{key}: {value if value else 'None'}")
+    display_status(kwargs, query_texts, config, model_parameters, show_full_systemprompt)
     return
 
   # Process references
@@ -1299,14 +1490,41 @@ def main(**kwargs: Any) -> None:
     sys.exit(1)
 
   # Process knowledgebase
+  knowledgebase_string = ''
   if kwargs['knowledgebase']:
     try:
-      knowledgebase_string = get_knowledgebase_string(kwargs['knowledgebase'], knowledgebase_query)
+      # Fix path handling for okusi knowledgebases by normalizing path format
+      kb_path = kwargs['knowledgebase']
+      if '/' in kb_path and not kb_path.endswith('.cfg'):
+        # Handle format like "okusi/okusiassociates" by converting to full path
+        kb_parts = kb_path.split('/')
+        if len(kb_parts) == 2:
+          kb_path = os.path.join(VECTORDBS_PATH, kb_parts[0], f"{kb_parts[1]}.cfg")
+      
+      # Check if we should bypass knowledgebase errors and continue anyway
+      bypass_kb_errors = os.environ.get('DV2_BYPASS_KB_ERRORS', 'false').lower() == 'true'
+      
+      try:
+        knowledgebase_string = get_knowledgebase_string(kb_path, knowledgebase_query)
+      except subprocess.CalledProcessError as e:
+        # Provide more helpful error message about API key issues
+        if "invalid_api_key" in str(e.stderr):
+          error_msg = f"Error: Invalid OpenAI API key when querying knowledgebase. Please check your OPENAI_API_KEY environment variable."
+        else:
+          error_msg = f"Error querying knowledgebase: {e.stderr}"
+        
+        if bypass_kb_errors:
+          click.echo(f"Warning: {error_msg} (continuing without knowledgebase)", err=True)
+          knowledgebase_string = f"<knowledgebase>\n# Error querying knowledgebase (continuing without it)\n</knowledgebase>\n\n"
+        else:
+          click.echo(error_msg, err=True)
+          sys.exit(1)
     except FileNotFoundError as e:
       click.echo(f"Error: {str(e)}", err=True)
       sys.exit(1)
-  else:
-    knowledgebase_string = ''
+    except Exception as e:
+      click.echo(f"Unexpected error with knowledgebase: {str(e)}", err=True)
+      sys.exit(1)
 
   # Execute queries --------------------------------------------------------
   query_result = ''
@@ -1369,11 +1587,8 @@ def main(**kwargs: Any) -> None:
   # Write out all the files to one CoT conversation -------------------------
   if len(output_files):
     filename_cot = os.path.join(output_dir, f'dv2_{project_name}_{int(time.time())}_0_.txt')
-    # Initialize the combined output file
+    # Open the combined file in write mode
     with open(filename_cot, 'w', encoding='utf-8') as cot_file:
-      cot_file.write('')  # Ensure the file is empty before appending
-    # Open the combined file once in append mode for efficiency
-    with open(filename_cot, 'a', encoding='utf-8') as cot_file:
       for filename in output_files:
         # Open each output file in read mode
         with open(filename, 'r', encoding='utf-8') as file:
@@ -1382,7 +1597,24 @@ def main(**kwargs: Any) -> None:
         # Append the content to the combined file with two newlines for separation
         cot_file.write(contents + '\n\n')
 
+# Make the module importable for testing
+# Export the functions that need to be tested
+__all__ = [
+  'query', 
+  'query_openai', 
+  'query_anthropic', 
+  'query_llama', 
+  'query_gemini',
+  'get_reference_string', 
+  'get_knowledgebase_string',
+  'load_config', 
+  'load_template_data', 
+  'get_template',
+  'get_canonical_model',
+  'list_available_canonical_models',
+  'display_status'
+]
+
+# Only execute main() when run as a script, not when imported
 if __name__ == '__main__':
   main()
-
-#fin

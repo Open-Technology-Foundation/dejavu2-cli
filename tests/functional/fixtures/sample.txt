@@ -1,0 +1,2 @@
+This is a sample reference text.
+It contains information about Paris, France.

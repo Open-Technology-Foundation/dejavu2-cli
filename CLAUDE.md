@@ -1,57 +1,36 @@
 # DejaVu2-CLI Project Guide
 
-## Build/Test Commands
-- Run CLI: `./dejavu2-cli "Your query" [options]`
-- Run with specific model: `./dejavu2-cli "Your query" -m claude-3-5-sonnet`
-- List models: `./dejavu2-cli --list-models`
-- List templates: `./dejavu2-cli --list-template-names`
-- Edit templates: `./dejavu2-cli --edit-templates`
-- Edit config: `./dejavu2-cli --edit-defaults`
-- View status: `./dejavu2-cli --status`
+## Commands
+- Run: `./dejavu2-cli "Your query" [options]` or `./dv2 "query" [options]` (alias)
+- Model selection: `./dejavu2-cli "query" -m claude-3-5-sonnet`
+- List/inspect: `./dejavu2-cli --list-models` `--list-template-names` `--status`
+- Configuration: `./dejavu2-cli --edit-templates` `--edit-defaults`
+- Debug: `./dejavu2-cli --verbose` for detailed logging
 
-## Environment Setup
-- API keys must be set as environment variables:
-  ```
-  # Required for Anthropic models (claude-*)
-  export ANTHROPIC_API_KEY="your-api-key"
-  
-  # Required for OpenAI models (gpt-*, o1-*)
-  export OPENAI_API_KEY="your-api-key"
-  
-  # No key needed for local Ollama models (llama-*)
-  # Ensure Ollama server is running locally
-  ```
-- Never store API keys in configuration files
+## Environment
+- Required: `export ANTHROPIC_API_KEY="your-key"` for Claude models
+- Required: `export OPENAI_API_KEY="your-key"` for OpenAI models
+- Local Ollama: No key needed, ensure Ollama server is running
+- NEVER store API keys in code or config files
 
-## Version Management
-- Version is maintained in `version.py` as `__version__`
-- Format follows semantic versioning (major.minor.patch)
-- Use `version_updater.py` to increment version numbers:
-  ```
-  # Increment patch version (0.9.5 -> 0.9.6)
-  ./version_updater.py 
-  
-  # Increment minor version (0.9.5 -> 0.10.0)
-  ./version_updater.py minor
-  
-  # Increment major version (0.9.5 -> 1.0.0)
-  ./version_updater.py major
-  ```
-- Version is accessible in code via `from version import __version__`
+## Development
+- Install dependencies: `pip install -r requirements.txt`
+- Run tests: `./run_tests.sh` or `python -m pytest`
+- Run specific tests: `./run_tests.sh --unit|--integration|--functional`
+- Run with coverage: `./run_tests.sh --coverage`
+- Update version: `./version_updater.py [patch|minor|major]`
 
-## Code Style Guidelines
-- **Formatting**: Use 2-space indentation for all code
-- **Imports**: Group imports (stdlib, third-party, local), sort alphabetically
-- **Types**: Use type hints from typing module (Any, Dict, Optional, etc.)
-- **Error Handling**: Use try/except blocks with specific exceptions
-- **Logging**: Use the built-in logging module, not print statements
-- **Variable Naming**: snake_case for variables/functions, PascalCase for classes
-- **Documentation**: Docstrings for modules, classes, and functions
-- **Error Messages**: Clear, informative messages with specific context
+## Code Style
+- Formatting: 2-space indentation, 100 char line limit
+- Imports: Group by stdlib → third-party → local, sort alphabetically
+- Types: Use typing module (Dict, List, Optional, Any, etc.)
+- Naming: snake_case for variables/functions, PascalCase for classes
+- Error handling: Specific try/except blocks, avoid bare except
+- Logging: Use logging module with appropriate levels, not print()
+- Documentation: Docstrings for all public functions, modules, classes
 
-## Project Structure
-- Python CLI tool using Click for argument parsing
-- Supports multiple LLM providers (OpenAI, Anthropic, Ollama)
-- Configuration via YAML files (defaults.yaml, llm-Templates.yaml)
-- Model definitions in Models.json
-- Integration with customkb for RAG capabilities
+## Architecture
+- CLI: Click-based Python CLI supporting multiple LLM providers
+- Config: YAML files (defaults.yaml, llm-Templates.yaml)
+- Models: Defined in Models.json
+- OS: Ubuntu/Debian only
