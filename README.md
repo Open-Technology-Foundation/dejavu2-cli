@@ -12,12 +12,13 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 ## Features
 
 - **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, and LLaMA models by specifying the model name or using predefined aliases.
+- **Conversation History**: Maintain context across multiple interactions with saved conversation history, allowing for follow-up questions and continued discussions.
 - **Customizable Parameters**: Fine-tune responses by adjusting parameters like temperature, maximum tokens, and system prompts directly from the command line.
 - **Contextual Inputs**: Enhance queries by including content from reference text files or customKB knowledge bases, allowing for richer and more informed responses.
 - **Template Management**: Utilize user-defined templates in JSON format to initialize query parameters, ensuring consistency and saving time on repetitive tasks.
 - **Configuration Loading**: Automatically load default settings and user-specific configurations from YAML files, with the ability to override them via command-line options.
-- **Listing and Editing Tools**: List available models, templates, and customKB knowledge bases. Edit configuration and template files directly from the command line using your preferred text editor.
-- **Status Display**: Preview the current state of all arguments and options before executing a query to verify and adjust settings as needed.
+- **Listing and Editing Tools**: List available models, templates, customKB knowledge bases, and conversations. Edit configuration and template files directly from the command line.
+- **Status Display**: Preview the current state of all arguments, options, and conversation context before executing a query.
 - **Model-Specific Parameter Handling**: Automatically adjusts parameters for different model types (like OpenAI's O1/O3 models) to ensure compatibility.
 
 ## Table of Contents
@@ -137,6 +138,26 @@ To view all available options:
 - `-M, --max-tokens INTEGER`  
   Define the maximum number of tokens for the LLM to generate.
 
+### Conversation Options
+
+- `-c, --continue`  
+  Continue the most recent conversation, maintaining context from previous exchanges.
+
+- `--conversation TEXT`  
+  Load a specific conversation by ID to continue an earlier interaction.
+
+- `--list-conversations`  
+  List all saved conversations with their IDs, titles, and other metadata.
+
+- `--delete-conversation TEXT`  
+  Delete a specific conversation by ID.
+
+- `--new-conversation`  
+  Start a new conversation even when continuing would be possible.
+  
+- `--title TEXT`  
+  Set a title for a new conversation (otherwise one will be auto-generated).
+
 ### Context Options
 
 - `-r, --reference TEXT`  
@@ -204,6 +225,21 @@ The system uses three main configuration files:
 1. **defaults.yaml**: Default settings and paths
 2. **Models.json**: Model definitions and aliases
 3. **Agents.json**: Template definitions
+
+### Conversation Storage
+
+Conversations are stored as JSON files in:
+
+```
+~/.config/dejavu2-cli/conversations/
+```
+
+Each JSON file contains:
+- Conversation metadata (id, title, created/updated timestamps)
+- Model configuration (model, temperature, max_tokens)
+- Complete message history (including system prompts)
+
+This allows for persistent context across sessions and detailed conversation tracking.
 
 ### defaults.yaml
 
@@ -337,6 +373,103 @@ Templates allow you to predefine sets of parameters for common tasks. This is es
 ./dv2 "Analyze the following code." -r "script.py,helpers.py"
 ```
 
+### Using Conversation History
+
+Conversations keep track of your interactions with the model, including system prompts, queries, responses, and configuration details. Each conversation automatically stores metadata about the model, temperature, and other settings.
+
+#### Starting Conversations
+
+Start a new conversation:
+```bash
+./dv2 "Tell me about quantum computing."
+```
+
+Start a new conversation with a specific title:
+```bash
+./dv2 "Let's discuss space exploration." --title "Space Exploration Discussion"
+```
+
+#### Managing Conversations
+
+List all saved conversations to see their IDs, titles, and message counts:
+```bash
+./dv2 --list-conversations
+```
+
+Example output:
+```
+=== SAVED CONVERSATIONS ===
+ID: 550e8400-e29b-41d4-a716-446655440000
+Title: Quantum Computing Discussion
+Messages: 4
+Created: 2025-03-01 15:04
+Updated: 2025-03-01 15:14
+---
+ID: 663a4911-c38b-42e5-9f23-889735512111
+Title: Space Exploration Discussion
+Messages: 2
+Created: 2025-02-28 10:23
+Updated: 2025-02-28 10:25
+```
+
+Examining a conversation with `--status` shows detailed information including metadata:
+```
+=== CONVERSATION ===
+ID: 550e8400-e29b-41d4-a716-446655440000
+Title: Quantum Computing Discussion
+Messages: 4
+Created: 2025-03-01 15:04
+Last Updated: 2025-03-01 15:14
+
+Metadata:
+  model: claude-3-7-sonnet-latest
+  temperature: 0.7
+  max_tokens: 4000
+  template: Dejavu2 - Helpful AI
+
+Preview of last exchanges:
+  User: Tell me about quantum computing
+  Assistant: Quantum computing is a type of computing that...
+  User: How does quantum entanglement work?
+```
+
+View or access a specific conversation by ID:
+```bash
+./dv2 --conversation 550e8400-e29b-41d4-a716-446655440000 --status
+```
+
+Delete a conversation when you no longer need it:
+```bash
+./dv2 --delete-conversation 550e8400-e29b-41d4-a716-446655440000
+```
+
+#### Continuing Conversations
+
+Continue the most recent conversation:
+```bash
+./dv2 "How does quantum entanglement work?" -c
+```
+
+Continue a specific conversation by ID:
+```bash
+./dv2 "I have more questions about this topic." --conversation 550e8400-e29b-41d4-a716-446655440000
+```
+
+Start a new conversation even if you have a recent one:
+```bash
+./dv2 "Let's talk about something different." --new-conversation
+```
+
+#### Changing Parameters Mid-Conversation
+
+You can change models or parameters while continuing a conversation:
+```bash
+# Continue with a different model
+./dv2 "Can you explain this more creatively?" -c -m "gpt4o" -t 0.7
+```
+
+The conversation metadata will automatically update to track these changes.
+
 ### Querying with a Knowledge Base
 
 ```bash
@@ -396,3 +529,44 @@ Templates allow you to predefine sets of parameters for common tasks. This is es
 # Using local Ollama model (with Ollama server running)
 ./dv2 "Translate to French" -m llama3
 ```
+
+## Development
+
+### Code Structure
+
+The codebase has been modularized for better maintainability:
+
+- **main.py**: Main CLI interface that connects all modules
+- **utils.py**: General utility functions for string processing and date/time handling
+- **config.py**: Configuration loading and file editing
+- **templates.py**: Template management and display
+- **models.py**: Model information handling and selection
+- **context.py**: Reference files and knowledge base handling
+- **llm_clients.py**: API client initialization and query functions
+- **display.py**: Status information display
+- **conversations.py**: Conversation history storage and management
+
+This modular approach makes the code easier to maintain, test, and extend with new features.
+
+### Coding Standards
+
+All Python code in this project follows these standards:
+- **Indentation**: ALWAYS use 2-space indentation (never tabs or 4 spaces)
+- **Line Length**: Maximum 100 characters per line
+- **Naming**: snake_case for variables/functions, PascalCase for classes
+- **Documentation**: Docstrings for all public functions, modules, and classes
+
+### Testing
+
+Run tests using the provided script:
+
+```bash
+./run_tests.sh
+```
+
+This will run unit, integration, and functional tests using pytest.
+
+## License
+
+This project is licensed under the GPL-3 License - see the [LICENSE](LICENSE) file for details.
+

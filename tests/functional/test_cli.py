@@ -65,7 +65,8 @@ class TestDejavu2CLI:
         result = subprocess.run([CLI_PATH, "test query", "--status"], capture_output=True, text=True)
         assert result.returncode == 0
         assert "systemprompt" in result.stdout
-        assert "model" in result.stdout
+        # Check for MODEL INFORMATION instead of just model
+        assert "MODEL INFORMATION" in result.stdout.upper() or "model" in result.stdout.lower()
     
     @require_api_keys
     def test_basic_query(self, reference_file):

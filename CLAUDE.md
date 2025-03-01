@@ -21,7 +21,7 @@
 - Update version: `./version_updater.py [patch|minor|major]`
 
 ## Code Style
-- Formatting: 2-space indentation, 100 char line limit
+- Formatting: ALWAYS use 2-space indentation, 100 char line limit
 - Imports: Group by stdlib → third-party → local, sort alphabetically
 - Types: Use typing module (Dict, List, Optional, Any, etc.)
 - Naming: snake_case for variables/functions, PascalCase for classes
