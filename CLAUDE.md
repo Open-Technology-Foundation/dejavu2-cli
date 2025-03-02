@@ -17,8 +17,10 @@
 - Install dependencies: `pip install -r requirements.txt`
 - Run tests: `./run_tests.sh` or `python -m pytest`
 - Run specific tests: `./run_tests.sh --unit|--integration|--functional`
+- Run single test: `python -m pytest tests/path/to/test_file.py`
 - Run with coverage: `./run_tests.sh --coverage`
 - Update version: `./version_updater.py [patch|minor|major]`
+- Organization: ALWAYS ignore contents of any subdirectory called `.gudang` (storage for deprecated files)
 
 ## Code Style
 - Formatting: ALWAYS use 2-space indentation, 100 char line limit

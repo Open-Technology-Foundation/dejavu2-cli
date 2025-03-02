@@ -113,8 +113,9 @@ logger = None
         help='Enable verbose (debug level) logging')
 @click.option('--log-file', type=str,
         help='Path to a log file where all logs will be written')
-@click.option('-q', '--quiet', is_flag=True, default=False,
+@click.option('-q', '--quiet', is_flag=True, default=True,
         help='Suppress log messages except for errors')
+# Note: verbose and quiet can't both be True - verbose takes precedence
 
 def main(**kwargs: Any) -> None:
     """
@@ -135,10 +136,14 @@ def main(**kwargs: Any) -> None:
     """
     # Set up logging first
     global logger
+    # Handle verbose/quiet conflict - verbose takes precedence
+    verbose = kwargs['verbose']
+    quiet = kwargs['quiet'] and not verbose  # If verbose is True, quiet becomes False
+    
     logger = setup_logging(
-        verbose=kwargs['verbose'],
+        verbose=verbose,
         log_file=kwargs['log_file'],
-        quiet=kwargs['quiet']
+        quiet=quiet
     )
     
     # Create module-specific loggers for other modules
@@ -546,3 +551,5 @@ def main(**kwargs: Any) -> None:
 # Make the module importable for testing
 if __name__ == '__main__':
     main()
+
+#fin

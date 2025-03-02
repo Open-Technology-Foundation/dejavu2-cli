@@ -21,6 +21,7 @@ paths:
 logging:
   level: DEBUG
   format: "%(levelname)s: %(message)s"
+  quiet: true
 
 # Vector database path
 vectordbs_path: /var/lib/vectordbs

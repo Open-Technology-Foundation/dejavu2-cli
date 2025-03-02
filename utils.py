@@ -16,14 +16,14 @@ from datetime import datetime
 import tzlocal
 
 # Setup logging
-def setup_logging(verbose=False, log_file=None, quiet=False):
+def setup_logging(verbose=False, log_file=None, quiet=True):
     """
     Configure logging for the application with proper formatting and filters.
     
     Args:
         verbose: Whether to use DEBUG level logging (default: False)
         log_file: Path to a log file to write logs to (default: None)
-        quiet: Whether to suppress console output (default: False)
+        quiet: Whether to suppress console output (default: True)
     
     Returns:
         The configured root logger instance
