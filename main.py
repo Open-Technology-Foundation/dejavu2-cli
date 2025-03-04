@@ -97,16 +97,28 @@ logger = None
 # Conversation history options
 @click.option('-c', '--continue', 'continue_conv', is_flag=True, default=False,
         help='Continue the most recent conversation')
-@click.option('--conversation', 'conversation_id', type=str,
+@click.option('--conversation', '-C', 'conversation_id', type=str,
         help='Load a specific conversation by ID')
-@click.option('--list-conversations', is_flag=True, default=False,
+@click.option('--list-conversations', '-x', is_flag=True, default=False,
         help='List all saved conversations')
-@click.option('--delete-conversation', type=str,
+@click.option('--delete-conversation', '-d', type=str,
         help='Delete a specific conversation by ID')
-@click.option('--new-conversation', is_flag=True, default=False,
+@click.option('--new-conversation', '-n', is_flag=True, default=False,
         help='Start a new conversation even when continuing would be possible')
-@click.option('--title', type=str,
+@click.option('--title', '-i', type=str,
         help='Set a title for a new conversation')
+@click.option('--export-conversation', '-e', type=str,
+        help='Export a conversation to markdown (specify ID or "current")')
+@click.option('--export-path', '-f', type=str,
+        help='Path to save the exported conversation markdown file')
+@click.option('--stdout', '-O', is_flag=True, default=False,
+        help='Output the exported conversation to stdout instead of a file')
+@click.option('--list-messages', '-m', type=str, metavar='CONVERSATION_ID',
+        help='List all messages in a conversation with their indices and content previews')
+@click.option('--remove-message', nargs=2, type=(str, int), metavar=('CONVERSATION_ID', 'MESSAGE_INDEX'),
+        help='Remove a single message from a conversation (use --list-messages first to find indices)')
+@click.option('--remove-pair', nargs=2, type=(str, int), metavar=('CONVERSATION_ID', 'USER_MESSAGE_INDEX'),
+        help='Remove a user-assistant message pair (index must point to a user message followed by an assistant message)')
 
 # Logging options
 @click.option('-v', '--verbose', is_flag=True, default=False,
@@ -232,6 +244,140 @@ def main(**kwargs: Any) -> None:
         else:
             click.echo(f"Conversation {kwargs['delete_conversation']} not found.")
         return
+        
+    # Handle listing messages in a conversation
+    if kwargs['list_messages']:
+        conv_id = kwargs['list_messages']
+        messages = conv_manager.list_conversation_messages(conv_id)
+        
+        if not messages:
+            click.echo(f"No messages found in conversation {conv_id} or conversation not found.")
+            return
+        
+        # Get conversation metadata for display
+        conv = conv_manager.load_conversation(conv_id)
+        title = "Untitled" if conv is None or conv.title is None else conv.title
+        
+        click.echo(f"\n=== MESSAGES IN CONVERSATION: {title} ===")
+        click.echo(f"Conversation ID: {conv_id}")
+        click.echo(f"Total messages: {len(messages)}")
+        click.echo("\n{:<5} {:<10} {:<20} {:<50}".format("IDX", "ROLE", "TIMESTAMP", "PREVIEW"))
+        click.echo("-" * 90)
+        
+        for msg in messages:
+            # Format role with proper capitalization
+            role = msg['role'].capitalize()
+            # Add a marker for system messages
+            if msg['is_system']:
+                role += " *"
+            
+            # Format index with brackets for clarity
+            idx = f"[{msg['index']}]"
+            
+            # Display in a table-like format with proper alignment  
+            click.echo("{:<5} {:<10} {:<20} {:<50}".format(
+                idx, role, msg['timestamp'], msg['content_preview']
+            ))
+        return
+    
+    # Handle removing a single message
+    if kwargs['remove_message']:
+        conv_id, msg_index = kwargs['remove_message']
+        if conv_manager.remove_message_at_index(conv_id, msg_index):
+            click.echo(f"Message at index {msg_index} removed from conversation {conv_id}.")
+        else:
+            # Get more detailed information about why it might have failed
+            conv = conv_manager.load_conversation(conv_id)
+            if not conv:
+                click.echo(f"Error: Conversation '{conv_id}' not found. Use --list-conversations to see available conversations.")
+            else:
+                msg_count = len(conv.messages)
+                if msg_index < 0 or msg_index >= msg_count:
+                    click.echo(f"Error: Message index {msg_index} is out of range. Valid indices are 0-{msg_count-1}.")
+                    click.echo(f"Tip: Use -m {conv_id} to list all messages with their indices.")
+                else:
+                    click.echo(f"Error: Failed to remove message for an unknown reason.")
+        return
+    
+    # Handle removing a message pair
+    if kwargs['remove_pair']:
+        conv_id, user_index = kwargs['remove_pair']
+        if conv_manager.remove_message_pair(conv_id, user_index):
+            click.echo(f"Message pair starting at index {user_index} removed from conversation {conv_id}.")
+        else:
+            # Provide more detailed error information
+            conv = conv_manager.load_conversation(conv_id)
+            if not conv:
+                click.echo(f"Error: Conversation '{conv_id}' not found. Use --list-conversations to see available conversations.")
+            else:
+                msg_count = len(conv.messages)
+                if user_index < 0 or user_index >= msg_count:
+                    click.echo(f"Error: Index {user_index} is out of range. Valid indices are 0-{msg_count-1}.")
+                elif user_index == msg_count - 1:
+                    click.echo(f"Error: Index {user_index} is the last message and doesn't have a following message to form a pair.")
+                elif conv.messages[user_index].role != "user":
+                    click.echo(f"Error: Message at index {user_index} is not a user message (it's a {conv.messages[user_index].role} message).")
+                    click.echo(f"Tip: A valid message pair must start with a user message followed by an assistant message.")
+                elif conv.messages[user_index + 1].role != "assistant":
+                    click.echo(f"Error: Message at index {user_index + 1} is not an assistant message (it's a {conv.messages[user_index + 1].role} message).")
+                    click.echo(f"Tip: A valid message pair must consist of a user message immediately followed by an assistant message.")
+                else:
+                    click.echo(f"Error: Failed to remove message pair for an unknown reason.")
+                
+                click.echo(f"Tip: Use -m {conv_id} to list all messages with their indices.")
+        return
+        
+    # Handle conversation export
+    if kwargs['export_conversation']:
+        try:
+            conv_id = None
+            if kwargs['export_conversation'].lower() != 'current':
+                conv_id = kwargs['export_conversation']
+                
+            # If "current" was specified but no active conversation exists,
+            # load the most recent conversation
+            if conv_id is None and not conv_manager.active_conversation:
+                most_recent = conv_manager.get_most_recent_conversation()
+                if most_recent:
+                    conv_manager.active_conversation = most_recent
+                    logger.debug(f"Loaded most recent conversation: {most_recent.id}")
+                else:
+                    click.echo("No conversations found to export.")
+                    return
+                
+            # Check if we should output to stdout instead of a file
+            if kwargs.get('stdout', False):
+                # Export to stdout (no file)
+                md_content = conv_manager.export_conversation_to_markdown(conv_id)
+                click.echo(md_content)
+                return
+                
+            # Otherwise, determine output path for file
+            output_path = kwargs.get('export_path')
+            if not output_path:
+                # Generate a default filename if none provided
+                if conv_id:
+                    filename = f"conversation_{conv_id}.md"
+                else:
+                    # For current conversation, use the active conversation
+                    active_conv = conv_manager.active_conversation
+                    if active_conv:
+                        filename = f"conversation_{active_conv.id}.md"
+                    else:
+                        # This shouldn't happen now since we loaded the most recent above
+                        click.echo("No conversations found to export.")
+                        return
+                
+                # Use current directory if no path specified
+                output_path = os.path.join(os.getcwd(), filename)
+            
+            # Export the conversation to file
+            result = conv_manager.export_conversation_to_markdown(conv_id, output_path)
+            click.echo(f"Conversation exported to: {result}")
+            return
+        except Exception as e:
+            click.echo(f"Error exporting conversation: {str(e)}", err=True)
+            return
 
     if kwargs['output_dir']:
         output_dir = kwargs.get('output_dir')

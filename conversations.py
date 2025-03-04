@@ -12,7 +12,7 @@ import logging
 from pathlib import Path
 from datetime import datetime
 from dataclasses import dataclass, asdict, field
-from typing import Dict, List, Optional, Any
+from typing import Dict, List, Optional, Any, Union, Tuple
 
 # Configure module logger
 logger = logging.getLogger(__name__)
@@ -68,6 +68,60 @@ class Conversation:
     self.messages.append(message)
     self.updated_at = datetime.now()
     return message
+    
+  def remove_message_at_index(self, index: int) -> bool:
+    """Remove a message at a specific index.
+    
+    Args:
+        index: Zero-based index of the message to remove
+        
+    Returns:
+        True if successful, False if index is invalid
+    """
+    if 0 <= index < len(self.messages):
+      del self.messages[index]
+      self.updated_at = datetime.now()
+      return True
+    return False
+    
+  def remove_message_pair(self, user_index: int) -> bool:
+    """Remove a user-assistant message pair.
+    
+    This assumes conversations follow the typical pattern of user message
+    followed by assistant message. System messages are preserved.
+    
+    Args:
+        user_index: Index of user message in the message list
+        
+    Returns:
+        True if both messages were successfully removed, 
+        False if indices are invalid or messages don't form a pair
+    """
+    # Validate that the index is within range and not the last message
+    # We need at least two messages (user and assistant) to remove a pair
+    if not (0 <= user_index < len(self.messages) - 1):
+      # Return early if index is out of range or points to the last message
+      # (which can't be part of a pair since there's no next message)
+      return False
+      
+    # Check that we have a user-assistant pair:
+    # 1. The message at user_index must be a user message
+    # 2. The following message must be an assistant message
+    # This ensures we maintain conversation integrity by only removing complete exchanges
+    if self.messages[user_index].role != "user" or self.messages[user_index + 1].role != "assistant":
+      return False
+      
+    # We remove messages in reverse order (higher index first) to avoid
+    # index shifting problems that would occur if we removed the lower index first
+    
+    # Remove the assistant message first (higher index)
+    del self.messages[user_index + 1]
+    # Then remove the user message
+    del self.messages[user_index]
+    
+    # Update the conversation's last modified timestamp
+    self.updated_at = datetime.now()
+    return True
   
   def to_dict(self) -> Dict[str, Any]:
     """Convert conversation to a dictionary for serialization."""
@@ -105,7 +159,7 @@ class Conversation:
       result.append({"role": msg.role, "content": msg.content})
     return result
   
-  def extract_message_history(self, max_messages: int = None) -> str:
+  def extract_message_history(self, max_messages: Optional[int] = None) -> str:
     """Extract message history as a formatted string for display."""
     history = []
     messages_to_include = self.messages
@@ -118,6 +172,56 @@ class Conversation:
         history.append(f"{msg.role.capitalize()}: {msg.content}")
     
     return "\n\n".join(history)
+    
+  def to_markdown(self) -> str:
+    """Export conversation as markdown format."""
+    md_content = []
+    
+    # Add conversation metadata header
+    md_content.append(f"# {self.title or 'Untitled Conversation'}")
+    md_content.append(f"*Conversation ID: `{self.id}`*")
+    md_content.append(f"*Created: {self.created_at.strftime('%Y-%m-%d %H:%M')}*")
+    md_content.append(f"*Updated: {self.updated_at.strftime('%Y-%m-%d %H:%M')}*")
+    
+    # Add metadata section
+    if self.metadata:
+      md_content.append("\n## Metadata")
+      for key, value in self.metadata.items():
+        if value is not None:  # Only include non-None values
+          md_content.append(f"- **{key}**: {value}")
+    
+    # Add conversation content
+    md_content.append("\n## Conversation")
+    
+    for msg in self.messages:
+      if msg.role == "system":
+        # Include system messages in a collapsible details section
+        md_content.append("\n<details>")
+        md_content.append("<summary>System Prompt</summary>\n")
+        md_content.append("```")
+        md_content.append(msg.content)
+        md_content.append("```")
+        md_content.append("</details>\n")
+      else:
+        # Get non-system messages
+        non_system_msgs = [m for m in self.messages if m.role != "system"]
+        
+        # Find index of this message in non-system messages
+        try:
+          idx = non_system_msgs.index(msg)
+          # Add separator before every message except the first non-system message
+          if idx > 0:
+            md_content.append("\n---\n")
+        except ValueError:
+          # This shouldn't happen, but just in case
+          pass
+          
+        # Format user and assistant messages
+        md_content.append(f"### {msg.role.capitalize()}")
+        md_content.append(f"*{msg.timestamp.strftime('%Y-%m-%d %H:%M:%S')}*\n")
+        md_content.append(msg.content)
+    
+    return "\n".join(md_content)
 
 
 class ConversationManager:
@@ -253,6 +357,157 @@ class ConversationManager:
     # First item is already the most recent due to sorting in list_conversations
     most_recent_id = conversations[0]['id']
     return self.load_conversation(most_recent_id)
+  
+  def export_conversation_to_markdown(self, conv_id: str = None, output_path: str = None) -> str:
+    """
+    Export a conversation to markdown format.
+    
+    Args:
+      conv_id: ID of the conversation to export. If None, uses active conversation.
+      output_path: Path to save the markdown file. If None, returns the markdown content.
+      
+    Returns:
+      Path to saved file if output_path is provided, otherwise the markdown content.
+    """
+    # Get the conversation to export
+    conversation = None
+    if conv_id:
+      conversation = self.load_conversation(conv_id)
+    else:
+      conversation = self.active_conversation
+    
+    if not conversation:
+      raise ValueError("No conversation to export")
+    
+    # Generate markdown content
+    md_content = conversation.to_markdown()
+    
+    # Save to file if path is provided
+    if output_path:
+      try:
+        with open(output_path, 'w', encoding='utf-8') as f:
+          f.write(md_content)
+        return output_path
+      except Exception as e:
+        raise IOError(f"Failed to write markdown file: {str(e)}")
+    
+    # Otherwise just return the markdown content
+    return md_content
+  
+  def remove_message_at_index(self, conv_id: str, index: int) -> bool:
+    """
+    Remove a message at a specific index in a conversation.
+    
+    Args:
+      conv_id: ID of the conversation
+      index: Zero-based index of the message to remove
+      
+    Returns:
+      True if successful, False otherwise
+    """
+    # Load the conversation
+    conv = self.load_conversation(conv_id)
+    if not conv:
+      logger.warning(f"Conversation not found for message removal: '{conv_id}' - Check that the ID is correct and the conversation exists")
+      return False
+    
+    # Remove the message
+    result = conv.remove_message_at_index(index)
+    
+    # Save changes if successful
+    if result:
+      self.save_conversation(conv)
+      logger.info(f"Removed message at index {index} from conversation {conv_id}")
+    else:
+      logger.warning(f"Failed to remove message at index {index} from conversation '{conv_id}' - Index may be out of range (available range: 0-{len(conv.messages)-1})")
+    
+    return result
+  
+  def remove_message_pair(self, conv_id: str, user_index: int) -> bool:
+    """
+    Remove a user-assistant message pair from a conversation.
+    
+    Args:
+      conv_id: ID of the conversation
+      user_index: Index of the user message to remove (assistant message will also be removed)
+      
+    Returns:
+      True if successful, False otherwise
+    """
+    # Load the conversation
+    conv = self.load_conversation(conv_id)
+    if not conv:
+      logger.warning(f"Conversation not found for message pair removal: '{conv_id}' - Check that the ID is correct and the conversation exists")
+      return False
+    
+    # Remove the message pair
+    result = conv.remove_message_pair(user_index)
+    
+    # Save changes if successful
+    if result:
+      self.save_conversation(conv)
+      logger.info(f"Removed message pair starting at index {user_index} from conversation {conv_id}")
+    else:
+      # Provide a helpful error message explaining why it might have failed
+      message_count = len(conv.messages)
+      if user_index >= message_count:
+        logger.warning(f"Failed to remove message pair: Index {user_index} is out of range (conversation has {message_count} messages)")
+      elif user_index == message_count - 1:
+        logger.warning(f"Failed to remove message pair: Index {user_index} is the last message and doesn't have a following message to form a pair")
+      elif not conv.messages[user_index].role == "user":
+        logger.warning(f"Failed to remove message pair: Message at index {user_index} is not a user message (it's a {conv.messages[user_index].role} message)")
+      elif not conv.messages[user_index + 1].role == "assistant":
+        logger.warning(f"Failed to remove message pair: Message at index {user_index + 1} is not an assistant message (it's a {conv.messages[user_index + 1].role} message)")
+      else:
+        logger.warning(f"Failed to remove message pair at index {user_index} from conversation {conv_id} for unknown reason")
+    
+    return result
+    
+  def list_conversation_messages(self, conv_id: str) -> List[Dict[str, Union[int, str, bool]]]:
+    """
+    List all messages in a conversation with their indices.
+    
+    Provides a structured view of all messages in the conversation, including
+    message role, content preview, timestamp, and a flag indicating if it's
+    a system message.
+    
+    Args:
+      conv_id: ID of the conversation to list messages from
+      
+    Returns:
+      List of dictionaries with the following keys:
+        - 'index': int - Zero-based index of the message in the conversation
+        - 'role': str - Message role ('user', 'assistant', or 'system')
+        - 'content_preview': str - First 50 chars of message content
+        - 'timestamp': str - Formatted timestamp of when message was created
+        - 'is_system': bool - Whether this is a system message
+        
+    Example:
+      [
+        {'index': 0, 'role': 'system', 'content_preview': 'You are a helpful...', 
+         'timestamp': '2025-03-01 12:00:00', 'is_system': True},
+        {'index': 1, 'role': 'user', 'content_preview': 'Hello!', 
+         'timestamp': '2025-03-01 12:01:00', 'is_system': False}
+      ]
+    """
+    # Load the conversation
+    conv = self.load_conversation(conv_id)
+    if not conv:
+      logger.warning(f"Conversation not found for listing messages: {conv_id}")
+      return []
+    
+    # Create list of messages with indices
+    result = []
+    for i, msg in enumerate(conv.messages):
+      result.append({
+        'index': i,
+        'role': msg.role,
+        'content_preview': msg.content[:50] + ('...' if len(msg.content) > 50 else ''),
+        'timestamp': msg.timestamp.strftime("%Y-%m-%d %H:%M:%S"),
+        'is_system': msg.role == "system"
+      })
+    
+    return result
   
   def suggest_title_from_content(self, conversation: Conversation, 
                               query_function: callable, 

@@ -109,7 +109,8 @@ def query_anthropic(
     systemprompt: str,
     model: str,
     temperature: float,
-    max_tokens: int
+    max_tokens: int,
+    conversation_messages: List[Dict[str, str]] = None
 ) -> str:
     """
     Send a query to the Anthropic API and return the response.
@@ -121,6 +122,7 @@ def query_anthropic(
         model: The Anthropic Claude model name to use
         temperature: Sampling temperature (higher = more random)
         max_tokens: Maximum number of tokens in the response
+        conversation_messages: Optional list of previous messages from conversation history
         
     Returns:
         The model's response as a string
@@ -139,9 +141,21 @@ def query_anthropic(
             "anthropic-beta": "output-128k-2025-02-19"
         }
         
+        # Prepare messages with conversation history if provided
+        messages = []
+        
+        # Add conversation history if available
+        if conversation_messages:
+            logger.debug(f"Including {len(conversation_messages)} previous messages in Anthropic query")
+            messages.extend(conversation_messages)
+        
+        # Add the current query as the last message
+        messages.append({"role": "user", "content": query_text})
+        
+        # Make the API call with conversation history included
         message = client.messages.create(
             max_tokens=max_tokens,
-            messages=[{"role": "user", "content": query_text}],
+            messages=messages,
             model=model,
             system=systemprompt,
             temperature=temperature,
@@ -160,7 +174,8 @@ def query_openai(
     system: str,
     model: str,
     temperature: float,
-    max_tokens: int
+    max_tokens: int,
+    conversation_messages: List[Dict[str, str]] = None
 ) -> str:
     """
     Send a query to the OpenAI API and return the response.
@@ -172,6 +187,7 @@ def query_openai(
         model: The OpenAI model name to use
         temperature: Sampling temperature (higher = more random)
         max_tokens: Maximum number of tokens in the response
+        conversation_messages: Optional list of previous messages from conversation history
         
     Returns:
         The model's response as a string
@@ -190,23 +206,49 @@ def query_openai(
         if model.startswith(('o1', 'o3')):
             # o1 and o3 models use max_completion_tokens instead of max_tokens
             # and don't accept temperature parameter
+            
+            # For o1/o3 models, conversation history handling needs to be different
+            # Create base messages with system prompt
+            messages = [
+                {"role": "user", "content": system},
+                {"role": "assistant", "content": "I have read and I understand this."}
+            ]
+            
+            # Add conversation history if available (excluding system prompts)
+            if conversation_messages:
+                logger.debug(f"Including {len(conversation_messages)} previous messages in OpenAI o1/o3 query")
+                # Filter out any system messages as o1/o3 models handle them differently
+                conv_msgs = [m for m in conversation_messages if m["role"] != "system"]
+                messages.extend(conv_msgs)
+            
+            # Add current query as the final message
+            messages.append({"role": "user", "content": query})
+            
             response = client.chat.completions.create(
                 model=model,
-                messages=[
-                    {"role": "user", "content": system},
-                    {"role": "assistant", "content": "I have read and I understand this."},
-                    {"role": "user", "content": query}
-                ],
+                messages=messages,
                 max_completion_tokens=max_tokens,
             )
         # *gpt* Models - standard format
         else:
+            # Create base messages list with system prompt
+            messages = [{"role": "system", "content": system}]
+            
+            # Add conversation history if available
+            if conversation_messages:
+                logger.debug(f"Including {len(conversation_messages)} previous messages in OpenAI GPT query")
+                # Standard GPT models can handle conversation history directly
+                for msg in conversation_messages:
+                    # Skip system messages as we already added our system prompt
+                    if msg["role"] != "system":
+                        messages.append(msg)
+            
+            # Add current query as the final message
+            messages.append({"role": "user", "content": query})
+            
             response = client.chat.completions.create(
                 model=model,
-                messages=[
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": query}
-                ],
+                messages=messages,
                 temperature=temperature,
                 max_tokens=max_tokens,
                 n=1, stop=''
@@ -224,7 +266,8 @@ def query_llama(
     systemprompt: str,
     model: str,
     temperature: float,
-    max_tokens: int
+    max_tokens: int,
+    conversation_messages: List[Dict[str, str]] = None
 ) -> str:
     """
     Send a query to a local LLaMA-based model via the Ollama server.
@@ -236,6 +279,7 @@ def query_llama(
         model: The LLaMA model name to use
         temperature: Sampling temperature (higher = more random)
         max_tokens: Maximum number of tokens in the response
+        conversation_messages: Optional list of previous messages from conversation history
         
     Returns:
         The model's response as a string
@@ -245,12 +289,24 @@ def query_llama(
     """
     try:
         # No API key check needed for local Ollama server, but check that it's running
+        
+        # Build message list starting with system prompt
+        messages = [{"role": "system", "content": systemprompt}]
+        
+        # Add conversation history if available
+        if conversation_messages:
+            logger.debug(f"Including {len(conversation_messages)} previous messages in Ollama query")
+            # Add conversation history, skipping system messages (we already added our own)
+            for msg in conversation_messages:
+                if msg["role"] != "system":
+                    messages.append(msg)
+        
+        # Add the current query as the final message
+        messages.append({"role": "user", "content": query_text})
+        
         response = client.chat.completions.create(
             model=model,
-            messages=[
-                {"role": "system", "content": systemprompt},
-                {"role": "user", "content": query_text}
-            ],
+            messages=messages,
             temperature=temperature,
             max_tokens=max_tokens
         )
@@ -269,7 +325,8 @@ def query_gemini(
     model: str,
     temperature: float,
     max_tokens: int,
-    api_key: str
+    api_key: str,
+    conversation_messages: List[Dict[str, str]] = None
 ) -> str:
     """
     Send a query to the Google Gemini API and return the response.
@@ -303,12 +360,37 @@ def query_gemini(
             max_output_tokens=max_tokens,
         )
         
-        # Format prompt according to Gemini's requirements
-        prompt = f"<s>\n{system}\n</s>\n\n{query}"
-        
-        # Create and call model
-        model_obj = genai.GenerativeModel(model, generation_config=gen_config)
-        response = model_obj.generate_content(prompt)
+        # For Gemini, we need to handle conversation history differently
+        if conversation_messages and len(conversation_messages) > 0:
+            logger.debug(f"Including {len(conversation_messages)} previous messages in Gemini query")
+            
+            # Create Gemini chat session
+            model_obj = genai.GenerativeModel(model, generation_config=gen_config)
+            chat = model_obj.start_chat(history=[])
+            
+            # Add system message first
+            system_prompt = f"<s>\n{system}\n</s>"
+            chat.send_message(system_prompt)
+            
+            # Add conversation history
+            for msg in conversation_messages:
+                if msg["role"] == "user":
+                    chat.send_message(msg["content"])
+                elif msg["role"] == "assistant":
+                    # We can't directly set assistant messages in Gemini API
+                    # So we'll simulate them in the history
+                    history = chat.history
+                    history.append({"role": "model", "parts": [{"text": msg["content"]}]})
+            
+            # Send the current query and get response
+            response = chat.send_message(query)
+        else:
+            # Format prompt according to Gemini's requirements for simple queries
+            prompt = f"<s>\n{system}\n</s>\n\n{query}"
+            
+            # Create and call model
+            model_obj = genai.GenerativeModel(model, generation_config=gen_config)
+            response = model_obj.generate_content(prompt)
         
         # Check if we got a valid response
         if response and response.text:
@@ -403,8 +485,10 @@ def query(
     logger.debug(f"Query parameters: temperature={temperature}, max_tokens={max_tokens}")
     
     # Check if conversation history is included
+    conversation_messages = None
     if messages:
         logger.debug(f"Including {len(messages)} previous messages from conversation history")
+        conversation_messages = messages
     
     # Ensure max_tokens doesn't exceed model limit
     original_max_tokens = max_tokens
@@ -434,7 +518,7 @@ def query(
                 
             return query_openai(
                 client, query_text, systemprompt, model, 
-                temperature, max_tokens
+                temperature, max_tokens, conversation_messages
             )
             
         elif model.startswith('claude'):
@@ -446,7 +530,7 @@ def query(
                 
             return query_anthropic(
                 client, query_text, systemprompt, model, 
-                temperature, max_tokens
+                temperature, max_tokens, conversation_messages
             )
             
         elif model.startswith('llama') or model.startswith('nemo'):
@@ -458,7 +542,7 @@ def query(
                 
             return query_llama(
                 client, query_text, systemprompt, model, 
-                temperature, max_tokens
+                temperature, max_tokens, conversation_messages
             )
             
         elif model.startswith('gemini'):
@@ -469,7 +553,7 @@ def query(
                 
             return query_gemini(
                 query_text, systemprompt, model, temperature, max_tokens, 
-                api_keys['GOOGLE_API_KEY']
+                api_keys['GOOGLE_API_KEY'], conversation_messages
             )
             
         else:

@@ -143,20 +143,29 @@ To view all available options:
 - `-c, --continue`  
   Continue the most recent conversation, maintaining context from previous exchanges.
 
-- `--conversation TEXT`  
+- `-C, --conversation TEXT`  
   Load a specific conversation by ID to continue an earlier interaction.
 
-- `--list-conversations`  
+- `-x, --list-conversations`  
   List all saved conversations with their IDs, titles, and other metadata.
 
-- `--delete-conversation TEXT`  
+- `-d, --delete-conversation TEXT`  
   Delete a specific conversation by ID.
 
-- `--new-conversation`  
+- `-n, --new-conversation`  
   Start a new conversation even when continuing would be possible.
   
-- `--title TEXT`  
+- `-i, --title TEXT`  
   Set a title for a new conversation (otherwise one will be auto-generated).
+  
+- `-e, --export-conversation TEXT`  
+  Export a conversation to markdown format. Use "current" for the active conversation or specify a conversation ID.
+
+- `-f, --export-path TEXT`  
+  Specify the path to save the exported markdown file (defaults to current directory).
+  
+- `-O, --stdout`  
+  Output the exported conversation directly to stdout instead of saving to a file.
 
 ### Context Options
 
@@ -469,6 +478,37 @@ You can change models or parameters while continuing a conversation:
 ```
 
 The conversation metadata will automatically update to track these changes.
+
+#### Exporting Conversations
+
+Export a conversation to markdown format for sharing or archiving:
+```bash
+# Export the most recent conversation to a file
+./dv2 -e current
+
+# Export a specific conversation by ID
+./dv2 -e 550e8400-e29b-41d4-a716-446655440000
+
+# Export to a specific path/filename
+./dv2 -e current -f "~/Documents/quantum_discussion.md"
+
+# Output directly to stdout (for piping or viewing)
+./dv2 -e current -O
+
+# Output to stdout and pipe to less for paging
+./dv2 -e current -O | less
+
+# Output to stdout and pipe to grep to search for specific content
+./dv2 -e current -O | grep "quantum"
+```
+
+The markdown export includes:
+- Conversation metadata (title, ID, creation date)
+- Model configuration (model, temperature, etc.)
+- Complete message history with timestamps
+- System prompts in collapsible sections
+
+This makes it easy to share conversations with others or store them in a more readable format.
 
 ### Querying with a Knowledge Base
 

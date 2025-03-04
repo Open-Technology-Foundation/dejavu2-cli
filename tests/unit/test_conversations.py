@@ -494,3 +494,305 @@ class TestConversationManager:
     empty_conv = Conversation(id="empty")
     title = manager.suggest_title_from_content(empty_conv, mock_query_func)
     assert title == "Untitled Conversation"  # Default title for empty conversations
+  
+  def test_list_conversation_messages(self):
+    """Test listing messages in a conversation with indices."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+      with patch('pathlib.Path.mkdir'):
+        manager = ConversationManager(storage_dir=temp_dir)
+        
+        # Create a test conversation
+        with patch('uuid.uuid4', return_value="test-msg-id"):
+          with patch('datetime.datetime') as mock_dt:
+            timestamp = datetime.datetime(2025, 1, 1, 12, 0, 0)
+            mock_dt.now.return_value = timestamp
+            mock_dt.fromisoformat = datetime.datetime.fromisoformat
+            
+            # Create a conversation with various messages
+            conv = Conversation(id="test-msg-id")
+            conv.add_message("system", "You are a helpful assistant")
+            conv.add_message("user", "Hello")
+            conv.add_message("assistant", "Hi there")
+            conv.add_message("user", "Tell me about Python")
+            
+            # Save the conversation
+            manager.active_conversation = conv
+            conv_path = os.path.join(temp_dir, "test-msg-id.json")
+            with open(conv_path, 'w') as f:
+              json.dump(conv.to_dict(), f)
+        
+        # List the messages
+        messages = manager.list_conversation_messages("test-msg-id")
+        
+        # Check if messages are listed with correct indices
+        assert len(messages) == 4
+        assert messages[0]['index'] == 0
+        assert messages[0]['role'] == "system"
+        assert messages[0]['is_system'] == True
+        assert "You are a helpful assistant" in messages[0]['content_preview']
+        
+        assert messages[1]['index'] == 1
+        assert messages[1]['role'] == "user"
+        assert messages[1]['is_system'] == False
+        assert "Hello" in messages[1]['content_preview']
+        
+        assert messages[2]['index'] == 2
+        assert messages[2]['role'] == "assistant"
+        assert messages[2]['is_system'] == False
+        assert "Hi there" in messages[2]['content_preview']
+        
+        assert messages[3]['index'] == 3
+        assert messages[3]['role'] == "user"
+        assert "Tell me about Python" in messages[3]['content_preview']
+        
+        # Test with nonexistent conversation
+        empty_list = manager.list_conversation_messages("nonexistent-id")
+        assert empty_list == []
+  
+  def test_remove_message_functions(self):
+    """Test removing messages and message pairs from conversations."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+      with patch('pathlib.Path.mkdir'):
+        manager = ConversationManager(storage_dir=temp_dir)
+        
+        # Create a test conversation
+        with patch('uuid.uuid4', return_value="test-remove-id"):
+          with patch('datetime.datetime') as mock_dt:
+            timestamp = datetime.datetime(2025, 1, 1, 12, 0, 0)
+            mock_dt.now.return_value = timestamp
+            mock_dt.fromisoformat = datetime.datetime.fromisoformat
+            
+            # Create a conversation with various messages
+            conv = Conversation(id="test-remove-id")
+            conv.add_message("system", "You are a helpful assistant")
+            conv.add_message("user", "Hello")
+            conv.add_message("assistant", "Hi there")
+            conv.add_message("user", "Tell me about Python")
+            conv.add_message("assistant", "Python is a programming language...")
+            
+            # Save the conversation
+            manager.active_conversation = conv
+            conv_path = os.path.join(temp_dir, "test-remove-id.json")
+            with open(conv_path, 'w') as f:
+              json.dump(conv.to_dict(), f)
+        
+        # Test removing a single message
+        result = manager.remove_message_at_index("test-remove-id", 2)
+        assert result is True
+        
+        # Verify message was removed by listing messages
+        messages = manager.list_conversation_messages("test-remove-id")
+        assert len(messages) == 4
+        assert messages[2]['role'] == "user"
+        assert "Tell me about Python" in messages[2]['content_preview']
+        
+        # Test removing a message pair
+        result = manager.remove_message_pair("test-remove-id", 2)
+        assert result is True
+        
+        # Verify pair was removed
+        messages = manager.list_conversation_messages("test-remove-id")
+        assert len(messages) == 2
+        assert messages[0]['role'] == "system"
+        assert messages[1]['role'] == "user"
+        assert "Hello" in messages[1]['content_preview']
+        
+        # Test with invalid indices
+        result = manager.remove_message_at_index("test-remove-id", 99)
+        assert result is False
+        
+        # Test with nonexistent conversation
+        result = manager.remove_message_pair("nonexistent-id", 0)
+        assert result is False
+    
+  def test_remove_message_at_index(self):
+    """Test removing a message at a specific index."""
+    conv = Conversation(id="test-id")
+    
+    # Add some messages
+    conv.add_message("system", "You are a helpful assistant")
+    conv.add_message("user", "Hello")
+    conv.add_message("assistant", "Hi there")
+    conv.add_message("user", "How are you?")
+    
+    assert len(conv.messages) == 4
+    
+    # Remove a message in the middle
+    result = conv.remove_message_at_index(2)
+    assert result is True
+    assert len(conv.messages) == 3
+    assert conv.messages[0].role == "system"
+    assert conv.messages[1].role == "user"
+    assert conv.messages[1].content == "Hello"
+    assert conv.messages[2].role == "user"
+    assert conv.messages[2].content == "How are you?"
+    
+    # Try removing with an invalid index
+    result = conv.remove_message_at_index(10)
+    assert result is False
+    assert len(conv.messages) == 3  # No change
+    
+    # Remove the first message
+    result = conv.remove_message_at_index(0)
+    assert result is True
+    assert len(conv.messages) == 2
+    assert conv.messages[0].role == "user"
+    assert conv.messages[0].content == "Hello"
+    
+  def test_remove_message_pair(self):
+    """Test removing a user-assistant message pair."""
+    conv = Conversation(id="test-id")
+    
+    # Add messages forming conversation pairs
+    conv.add_message("system", "You are a helpful assistant")
+    conv.add_message("user", "Hello")
+    conv.add_message("assistant", "Hi there")
+    conv.add_message("user", "How are you?")
+    conv.add_message("assistant", "I'm doing well!")
+    
+    assert len(conv.messages) == 5
+    
+    # Remove the second pair (user: "How are you?" -> assistant: "I'm doing well!")
+    result = conv.remove_message_pair(3)
+    assert result is True
+    assert len(conv.messages) == 3
+    assert conv.messages[0].role == "system"
+    assert conv.messages[1].role == "user"
+    assert conv.messages[1].content == "Hello"
+    assert conv.messages[2].role == "assistant"
+    assert conv.messages[2].content == "Hi there"
+    
+    # Try removing with an invalid index (out of bounds)
+    result = conv.remove_message_pair(10)
+    assert result is False
+    assert len(conv.messages) == 3  # No change
+    
+    # Try removing with a non-user message index
+    result = conv.remove_message_pair(0)  # System message
+    assert result is False
+    assert len(conv.messages) == 3  # No change
+    
+    # Remove the remaining pair
+    result = conv.remove_message_pair(1)  # user: "Hello"
+    assert result is True
+    assert len(conv.messages) == 1
+    assert conv.messages[0].role == "system"
+  
+  def test_conversation_to_markdown(self):
+    """Test exporting a conversation to markdown format."""
+    # Create a test conversation with all types of messages
+    timestamp = datetime.datetime(2025, 1, 1, 12, 0, 0)
+    metadata = {"model": "claude-3-5-sonnet", "temperature": 0.7, "max_tokens": 4000}
+    
+    conv = Conversation(
+      id="test-md-export",
+      title="Markdown Export Test",
+      created_at=timestamp,
+      updated_at=timestamp,
+      metadata=metadata
+    )
+    
+    # Add different types of messages with fixed timestamps
+    msg_timestamp = timestamp  # Keep same timestamp for consistency
+    
+    # Create messages directly to set fixed timestamps
+    sys_msg = Message(role="system", content="You are a helpful assistant.", timestamp=msg_timestamp)
+    user_msg = Message(role="user", content="Tell me about markdown.", timestamp=msg_timestamp)
+    asst_msg = Message(role="assistant", content="Markdown is a lightweight markup language...", timestamp=msg_timestamp)
+    
+    # Add messages directly to conversation list
+    conv.messages = [sys_msg, user_msg, asst_msg]
+    
+    # Export to markdown
+    markdown = conv.to_markdown()
+    
+    # Verify content
+    assert "# Markdown Export Test" in markdown
+    assert "*Conversation ID: `test-md-export`*" in markdown
+    assert "*Created: 2025-01-01 12:00*" in markdown
+    assert "*Updated: 2025-01-01 12:00*" in markdown
+    
+    # Check metadata section
+    assert "## Metadata" in markdown
+    assert "**model**: claude-3-5-sonnet" in markdown
+    assert "**temperature**: 0.7" in markdown
+    assert "**max_tokens**: 4000" in markdown
+    
+    # Check conversation content
+    assert "## Conversation" in markdown
+    assert "<details>" in markdown
+    assert "<summary>System Prompt</summary>" in markdown
+    assert "You are a helpful assistant." in markdown
+    assert "### User" in markdown
+    assert "Tell me about markdown." in markdown
+    assert "### Assistant" in markdown
+    assert "Markdown is a lightweight markup language" in markdown
+    assert "---" in markdown  # Check for separator between messages
+    
+  def test_export_conversation_to_markdown(self):
+    """Test exporting a conversation to a markdown file."""
+    with tempfile.TemporaryDirectory() as temp_dir:
+      with patch('pathlib.Path.mkdir'):
+        manager = ConversationManager(storage_dir=temp_dir)
+        
+        # Create a test conversation with fixed timestamps
+        timestamp = datetime.datetime(2025, 1, 1, 12, 0, 0)
+        
+        # Create the conversation directly with fixed timestamps
+        conv = Conversation(
+          id="test-md-id",
+          title="Export Test",
+          created_at=timestamp,
+          updated_at=timestamp,
+          metadata={"model": "test-model", "temperature": 0.7}
+        )
+        
+        # Create messages with fixed timestamps
+        sys_msg = Message(role="system", content="You are a helpful assistant.", timestamp=timestamp)
+        user_msg = Message(role="user", content="Hello", timestamp=timestamp)
+        asst_msg = Message(role="assistant", content="Hi there!", timestamp=timestamp)
+        
+        # Add messages directly to conversation
+        conv.messages = [sys_msg, user_msg, asst_msg]
+        
+        # Set as active conversation
+        manager.active_conversation = conv
+        
+        # Save the conversation
+        # Create conv file directly to avoid timestamp issues
+        conv_path = os.path.join(temp_dir, "test-md-id.json")
+        with open(conv_path, 'w') as f:
+          json.dump(conv.to_dict(), f)
+        
+        # Create a temporary file for the export
+        export_path = os.path.join(temp_dir, "export_test.md")
+        
+        # Test exporting active conversation
+        result = manager.export_conversation_to_markdown(output_path=export_path)
+        assert result == export_path
+        assert os.path.exists(export_path)
+        
+        # Verify content
+        with open(export_path, 'r', encoding='utf-8') as f:
+          content = f.read()
+          assert "# Export Test" in content
+          assert "*Conversation ID: `test-md-id`*" in content
+          assert "**model**: test-model" in content
+          assert "You are a helpful assistant." in content
+          assert "Hello" in content
+          assert "Hi there!" in content
+        
+        # Test exporting by ID
+        os.remove(export_path)  # Delete the previous export
+        result = manager.export_conversation_to_markdown(conv_id="test-md-id", output_path=export_path)
+        assert result == export_path
+        assert os.path.exists(export_path)
+        
+        # Test exporting with non-existent ID
+        with pytest.raises(ValueError, match="No conversation to export"):
+          manager.export_conversation_to_markdown(conv_id="non-existent-id", output_path=export_path)
+        
+        # Test exporting without saving to file (just return content)
+        content = manager.export_conversation_to_markdown(conv_id="test-md-id")
+        assert isinstance(content, str)
+        assert "# Export Test" in content

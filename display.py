@@ -112,7 +112,8 @@ def display_status(
                 'edit_models', 'list_models_details', 'model', 'temperature', 'max_tokens', 
                 'reference', 'knowledgebase', 'template', 'completions', 
                 'continue_conv', 'conversation_id', 'list_conversations', 'delete_conversation',
-                'new_conversation', 'title', 
+                'new_conversation', 'title', 'export_conversation', 'export_path', 'stdout',
+                'list_messages', 'remove_message', 'remove_pair',
                 'verbose', 'log_file', 'quiet',
                 'logging'}
     
