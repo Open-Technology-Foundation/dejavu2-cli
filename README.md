@@ -1,7 +1,6 @@
 # dejavu2-cli 
 
-A powerful command-line interface for interacting with various 
-Large Language Models (LLMs) including OpenAI, Anthropic Claude, Google Gemini, and local models via Ollama.
+A powerful command-line interface for interacting with various Large Language Models (LLMs) including OpenAI, Anthropic Claude, Google Gemini, and local models via Ollama.
 
 ## Overview
 
@@ -32,7 +31,7 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 - [Development](#development)
 - [Contributing](#contributing)
 - [License](#license)
-- [Author](#author)
+- [Authors](#authors)
 
 ## Installation
 
@@ -52,7 +51,7 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 
 2. **Install Dependencies**:
 
-   Recommended to set up a virtual environment first.
+   Strongly recommended to set up a virtual environment first.
    
    ```bash
    pip install -r requirements.txt
@@ -97,9 +96,9 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 5. **Run the Script**:
 
    ```bash
-   ./dejavu2-cli "Your query here"
+   dejavu2-cli "Your query here"
    # Or use the shorthand
-   ./dv2 "Your query here"
+   dv2 "Your query here"
    ```
 
 ## Usage
@@ -107,13 +106,13 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 Run `dv2` with your query and desired options:
 
 ```bash
-./dv2 "Your query here" [options]
+dv2 "Your query here" [options]
 ```
 
 To view all available options:
 
 ```bash
-./dv2 --help
+dv2 --help
 ```
 
 ## Command-Line Options
@@ -166,6 +165,15 @@ To view all available options:
   
 - `-O, --stdout`  
   Output the exported conversation directly to stdout instead of saving to a file.
+  
+- `-m, --list-messages CONVERSATION_ID`  
+  List all messages in a conversation with their indices and content previews, useful for identifying specific messages to remove.
+
+- `--remove-message ('CONVERSATION_ID', 'MESSAGE_INDEX')`  
+  Remove a single message from a conversation. Use `--list-messages` first to find the correct indices.
+
+- `--remove-pair ('CONVERSATION_ID', 'USER_MESSAGE_INDEX')`  
+  Remove a user-assistant message pair. The index must point to a user message that is followed by an assistant message.
 
 ### Context Options
 
@@ -353,7 +361,7 @@ Templates allow you to predefine sets of parameters for common tasks. This is es
 ### Using a Template
 
 ```bash
-./dv2 "Explain quantum computing in simple terms." -T "DéjàVu2 - Helpful AI"
+dv2 "Explain quantum computing in simple terms." -T "DéjàVu2 - Helpful AI"
 ```
 
 ## Examples
@@ -361,25 +369,25 @@ Templates allow you to predefine sets of parameters for common tasks. This is es
 ### Basic Query
 
 ```bash
-./dv2 "What is the capital of France?"
+dv2 "What is the capital of France?"
 ```
 
 ### Using a Template
 
 ```bash
-./dv2 "Provide a summary of the latest news." -T "Summariser - Summary Machine"
+dv2 "Provide a summary of the latest news." -T "Summariser - Summary Machine"
 ```
 
 ### Specifying a Model and Adjusting Temperature
 
 ```bash
-./dv2 "Generate a creative story about a flying car." -m gpt4o -t 0.9
+dv2 "Generate a creative story about a flying car." -m gpt4o -t 0.9
 ```
 
 ### Including Reference Files
 
 ```bash
-./dv2 "Analyze the following code." -r "script.py,helpers.py"
+dv2 "Analyze the following code." -r "script.py,helpers.py"
 ```
 
 ### Using Conversation History
@@ -390,19 +398,19 @@ Conversations keep track of your interactions with the model, including system p
 
 Start a new conversation:
 ```bash
-./dv2 "Tell me about quantum computing."
+dv2 "Tell me about quantum computing."
 ```
 
 Start a new conversation with a specific title:
 ```bash
-./dv2 "Let's discuss space exploration." --title "Space Exploration Discussion"
+dv2 "Let's discuss space exploration." --title "Space Exploration Discussion"
 ```
 
 #### Managing Conversations
 
 List all saved conversations to see their IDs, titles, and message counts:
 ```bash
-./dv2 --list-conversations
+dv2 --list-conversations
 ```
 
 Example output:
@@ -444,29 +452,66 @@ Preview of last exchanges:
 
 View or access a specific conversation by ID:
 ```bash
-./dv2 --conversation 550e8400-e29b-41d4-a716-446655440000 --status
+dv2 --conversation 550e8400-e29b-41d4-a716-446655440000 --status
 ```
 
 Delete a conversation when you no longer need it:
 ```bash
-./dv2 --delete-conversation 550e8400-e29b-41d4-a716-446655440000
+dv2 --delete-conversation 550e8400-e29b-41d4-a716-446655440000
+```
+
+View all messages in a conversation with their indices and content previews:
+```bash
+dv2 --list-messages 550e8400-e29b-41d4-a716-446655440000
+```
+
+Example output:
+```
+=== MESSAGES IN CONVERSATION ===
+ID: 550e8400-e29b-41d4-a716-446655440000
+Title: Quantum Computing Discussion
+
+Index: 0 | Role: system | 2025-03-01 15:04:00
+Content: You are Dejavu2, a friendly and helpful general AI assistant...
+
+Index: 1 | Role: user | 2025-03-01 15:04:10
+Content: Tell me about quantum computing
+
+Index: 2 | Role: assistant | 2025-03-01 15:04:15
+Content: Quantum computing is a type of computing that...
+
+Index: 3 | Role: user | 2025-03-01 15:14:22
+Content: How does quantum entanglement work?
+
+Index: 4 | Role: assistant | 2025-03-01 15:14:30
+Content: Quantum entanglement is a phenomenon where two particles...
+```
+
+Remove a specific message from a conversation:
+```bash
+dv2 --remove-message 550e8400-e29b-41d4-a716-446655440000 3
+```
+
+Remove a user-assistant message pair (must specify the user message index):
+```bash
+dv2 --remove-pair 550e8400-e29b-41d4-a716-446655440000 1
 ```
 
 #### Continuing Conversations
 
 Continue the most recent conversation:
 ```bash
-./dv2 "How does quantum entanglement work?" -c
+dv2 "How does quantum entanglement work?" -c
 ```
 
 Continue a specific conversation by ID:
 ```bash
-./dv2 "I have more questions about this topic." --conversation 550e8400-e29b-41d4-a716-446655440000
+dv2 "I have more questions about this topic." --conversation 550e8400-e29b-41d4-a716-446655440000
 ```
 
 Start a new conversation even if you have a recent one:
 ```bash
-./dv2 "Let's talk about something different." --new-conversation
+dv2 "Let's talk about something different." --new-conversation
 ```
 
 #### Changing Parameters Mid-Conversation
@@ -474,7 +519,7 @@ Start a new conversation even if you have a recent one:
 You can change models or parameters while continuing a conversation:
 ```bash
 # Continue with a different model
-./dv2 "Can you explain this more creatively?" -c -m "gpt4o" -t 0.7
+dv2 "Can you explain this more creatively?" -c -m "gpt4o" -t 0.7
 ```
 
 The conversation metadata will automatically update to track these changes.
@@ -484,22 +529,22 @@ The conversation metadata will automatically update to track these changes.
 Export a conversation to markdown format for sharing or archiving:
 ```bash
 # Export the most recent conversation to a file
-./dv2 -e current
+dv2 -e current
 
 # Export a specific conversation by ID
-./dv2 -e 550e8400-e29b-41d4-a716-446655440000
+dv2 -e 550e8400-e29b-41d4-a716-446655440000
 
 # Export to a specific path/filename
-./dv2 -e current -f "~/Documents/quantum_discussion.md"
+dv2 -e current -f "~/Documents/quantum_discussion.md"
 
 # Output directly to stdout (for piping or viewing)
-./dv2 -e current -O
+dv2 -e current -O
 
 # Output to stdout and pipe to less for paging
-./dv2 -e current -O | less
+dv2 -e current -O | less
 
 # Output to stdout and pipe to grep to search for specific content
-./dv2 -e current -O | grep "quantum"
+dv2 -e current -O | grep "quantum"
 ```
 
 The markdown export includes:
@@ -507,67 +552,69 @@ The markdown export includes:
 - Model configuration (model, temperature, etc.)
 - Complete message history with timestamps
 - System prompts in collapsible sections
+- Clear separation between message pairs with horizontal rules
+- Proper formatting of role headers and timestamps
 
-This makes it easy to share conversations with others or store them in a more readable format.
+This improved formatting makes it easy to share conversations with others or store them in a more readable and visually organized format.
 
 ### Querying with a Knowledge Base
 
 ```bash
-./dv2 "Explain the company's financial position." -k "financial_reports"
+dv2 "Explain the company's financial position." -k "financial_reports"
 ```
 
 ### Displaying Full Status Information
 
 ```bash
-./dv2 "Your query here" --status -P
+dv2 "Your query here" --status -P
 ```
 
 ### Listing All Available Information
 
 ```bash
 # List models with basic information
-./dv2 --list-models
+dv2 --list-models
 
 # List models with detailed information
-./dv2 -A
+dv2 -A
 
 # List all templates
-./dv2 -l all
+dv2 -l all
 
 # List template names only (concise)
-./dv2 -L
+dv2 -L
 
 # List available knowledge bases
-./dv2 -K
+dv2 -K
 ```
 
 ### Editing Configuration Files
 
 ```bash
 # Edit templates file
-./dv2 -E
+dv2 -E
 
 # Edit defaults configuration
-./dv2 -D
+dv2 -D
 
 # Edit models configuration
-./dv2 -d
+dv2 -d
 ```
 
 ### Using Different Model Types
 
 ```bash
 # Using OpenAI GPT-4o model
-./dv2 "Explain quantum physics" -m gpt4o
+dv2 "Explain quantum physics" -m gpt4o
 
 # Using Anthropic Claude model
-./dv2 "Write a poem about nature" -m sonnet
+dv2 "Write a poem about nature" -m sonnet
 
 # Using OpenAI o1-preview model
-./dv2 "Analyze this data" -m o1-preview
+dv2 "Analyze this data" -m o1-preview
 
 # Using local Ollama model (with Ollama server running)
-./dv2 "Translate to French" -m llama3
+dv2 "Translate to French" -m llama3
 ```
 
 ## Development
@@ -609,4 +656,12 @@ This will run unit, integration, and functional tests using pytest.
 ## License
 
 This project is licensed under the GPL-3 License - see the [LICENSE](LICENSE) file for details.
+
+## Authors
+
+- Gary Dean
+- Claude Code
+- AI Community Contributors
+
+*Current Version: 0.8.4*
 
