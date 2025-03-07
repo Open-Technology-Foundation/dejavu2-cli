@@ -148,7 +148,7 @@ dv2 --help
 - `-x, --list-conversations`  
   List all saved conversations with their IDs, titles, and other metadata.
 
-- `-d, --delete-conversation TEXT`  
+- `-X, --delete-conversation TEXT`  
   Delete a specific conversation by ID.
 
 - `-n, --new-conversation`  
@@ -166,7 +166,7 @@ dv2 --help
 - `-O, --stdout`  
   Output the exported conversation directly to stdout instead of saving to a file.
   
-- `-m, --list-messages CONVERSATION_ID`  
+- `-W, --list-messages CONVERSATION_ID`  
   List all messages in a conversation with their indices and content previews, useful for identifying specific messages to remove.
 
 - `--remove-message ('CONVERSATION_ID', 'MESSAGE_INDEX')`  
