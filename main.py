@@ -42,7 +42,7 @@ logger = None
 # MAIN COMMAND LINE INTERFACE ============================================================
 @click.command(context_settings=dict(help_option_names=['-h', '--help']))
 @click.argument('query_text', nargs=-1, required=False)
-@click.option('-V', '--version', is_flag=True, 
+@click.option('-V', '--version', is_flag=True,
               callback=lambda ctx, param, value: click.echo(f"dejavu2-cli v{VERSION}") or ctx.exit() if value else None,
               help='Show version and exit', is_eager=True)
 
@@ -101,7 +101,7 @@ logger = None
         help='Load a specific conversation by ID')
 @click.option('--list-conversations', '-x', is_flag=True, default=False,
         help='List all saved conversations')
-@click.option('--delete-conversation', '-d', type=str,
+@click.option('--delete-conversation', '-X', type=str,
         help='Delete a specific conversation by ID')
 @click.option('--new-conversation', '-n', is_flag=True, default=False,
         help='Start a new conversation even when continuing would be possible')
@@ -113,7 +113,7 @@ logger = None
         help='Path to save the exported conversation markdown file')
 @click.option('--stdout', '-O', is_flag=True, default=False,
         help='Output the exported conversation to stdout instead of a file')
-@click.option('--list-messages', '-m', type=str, metavar='CONVERSATION_ID',
+@click.option('--list-messages', '-W', type=str, metavar='CONVERSATION_ID',
         help='List all messages in a conversation with their indices and content previews')
 @click.option('--remove-message', nargs=2, type=(str, int), metavar=('CONVERSATION_ID', 'MESSAGE_INDEX'),
         help='Remove a single message from a conversation (use --list-messages first to find indices)')
@@ -132,17 +132,17 @@ logger = None
 def main(**kwargs: Any) -> None:
     """
     Main entry point for the dejavu2-cli program.
-    
+
     Processes command-line arguments, handles utility commands (like listing templates
     or editing configuration files), and executes LLM queries with the specified parameters.
-    
+
     Features include:
     - Querying various LLM providers (OpenAI, Anthropic, local models)
     - Including reference files and knowledge base content with queries
     - Using templates for consistent parameters
     - Maintaining conversation history across multiple interactions
     - Saving and loading conversations
-    
+
     Args:
         **kwargs: Command-line arguments parsed by Click
     """
@@ -151,13 +151,13 @@ def main(**kwargs: Any) -> None:
     # Handle verbose/quiet conflict - verbose takes precedence
     verbose = kwargs['verbose']
     quiet = kwargs['quiet'] and not verbose  # If verbose is True, quiet becomes False
-    
+
     logger = setup_logging(
         verbose=verbose,
         log_file=kwargs['log_file'],
         quiet=quiet
     )
-    
+
     # Create module-specific loggers for other modules
     config_logger = logging.getLogger('config')
     models_logger = logging.getLogger('models')
@@ -166,25 +166,25 @@ def main(**kwargs: Any) -> None:
     llm_logger = logging.getLogger('llm_clients')
     display_logger = logging.getLogger('display')
     conv_logger = logging.getLogger('conversations')
-    
+
     # Log startup information
     logger.info(f"Starting dejavu2-cli v{VERSION}")
     logger.debug(f"Python version: {sys.version}")
     logger.debug(f"Working directory: {os.getcwd()}")
-    
+
     # Load configuration
     config = load_config(DEFAULT_CONFIG_PATH, USER_CONFIG_PATH)
     config_logger.debug(f"Configuration loaded from {config.get('config_file', 'defaults')}")
-    
+
     # Set template path
     template_path = os.path.join(PRGDIR, config['paths']['template_path'])
     models_json_path = os.path.join(PRGDIR, 'Models.json')
     customkb_executable = config['paths']['customkb']
     vectordbs_path = config.get('vectordbs_path', '/var/lib/vectordbs')
-    
+
     # Initialize conversation manager
     conv_manager = ConversationManager()
-    
+
     # Handle special options first
     if kwargs['edit_templates']:
         edit_json_file(template_path)
@@ -205,11 +205,11 @@ def main(**kwargs: Any) -> None:
     if kwargs['list_models']:
         list_models(models_json_path, False)
         return
-        
+
     if kwargs['list_models_details']:
         list_models(models_json_path, True)
         return
-        
+
     if kwargs.get('edit_models'):
         edit_json_file(models_json_path)
         return
@@ -217,14 +217,14 @@ def main(**kwargs: Any) -> None:
     if kwargs['list_knowledge_bases']:
         list_knowledge_bases(vectordbs_path)
         return
-        
+
     # Handle conversation listing
     if kwargs['list_conversations']:
         conversations = conv_manager.list_conversations()
         if not conversations:
             click.echo("No saved conversations found.")
             return
-            
+
         click.echo("\n=== SAVED CONVERSATIONS ===")
         for conv in conversations:
             created = datetime.fromisoformat(conv['created_at']).strftime("%Y-%m-%d %H:%M")
@@ -236,7 +236,7 @@ def main(**kwargs: Any) -> None:
             click.echo(f"Updated: {updated}")
             click.echo("---")
         return
-    
+
     # Handle conversation deletion
     if kwargs['delete_conversation']:
         if conv_manager.delete_conversation(kwargs['delete_conversation']):
@@ -244,42 +244,42 @@ def main(**kwargs: Any) -> None:
         else:
             click.echo(f"Conversation {kwargs['delete_conversation']} not found.")
         return
-        
+
     # Handle listing messages in a conversation
     if kwargs['list_messages']:
         conv_id = kwargs['list_messages']
         messages = conv_manager.list_conversation_messages(conv_id)
-        
+
         if not messages:
             click.echo(f"No messages found in conversation {conv_id} or conversation not found.")
             return
-        
+
         # Get conversation metadata for display
         conv = conv_manager.load_conversation(conv_id)
         title = "Untitled" if conv is None or conv.title is None else conv.title
-        
+
         click.echo(f"\n=== MESSAGES IN CONVERSATION: {title} ===")
         click.echo(f"Conversation ID: {conv_id}")
         click.echo(f"Total messages: {len(messages)}")
         click.echo("\n{:<5} {:<10} {:<20} {:<50}".format("IDX", "ROLE", "TIMESTAMP", "PREVIEW"))
         click.echo("-" * 90)
-        
+
         for msg in messages:
             # Format role with proper capitalization
             role = msg['role'].capitalize()
             # Add a marker for system messages
             if msg['is_system']:
                 role += " *"
-            
+
             # Format index with brackets for clarity
             idx = f"[{msg['index']}]"
-            
-            # Display in a table-like format with proper alignment  
+
+            # Display in a table-like format with proper alignment
             click.echo("{:<5} {:<10} {:<20} {:<50}".format(
                 idx, role, msg['timestamp'], msg['content_preview']
             ))
         return
-    
+
     # Handle removing a single message
     if kwargs['remove_message']:
         conv_id, msg_index = kwargs['remove_message']
@@ -298,7 +298,7 @@ def main(**kwargs: Any) -> None:
                 else:
                     click.echo(f"Error: Failed to remove message for an unknown reason.")
         return
-    
+
     # Handle removing a message pair
     if kwargs['remove_pair']:
         conv_id, user_index = kwargs['remove_pair']
@@ -323,17 +323,17 @@ def main(**kwargs: Any) -> None:
                     click.echo(f"Tip: A valid message pair must consist of a user message immediately followed by an assistant message.")
                 else:
                     click.echo(f"Error: Failed to remove message pair for an unknown reason.")
-                
+
                 click.echo(f"Tip: Use -m {conv_id} to list all messages with their indices.")
         return
-        
+
     # Handle conversation export
     if kwargs['export_conversation']:
         try:
             conv_id = None
             if kwargs['export_conversation'].lower() != 'current':
                 conv_id = kwargs['export_conversation']
-                
+
             # If "current" was specified but no active conversation exists,
             # load the most recent conversation
             if conv_id is None and not conv_manager.active_conversation:
@@ -344,14 +344,14 @@ def main(**kwargs: Any) -> None:
                 else:
                     click.echo("No conversations found to export.")
                     return
-                
+
             # Check if we should output to stdout instead of a file
             if kwargs.get('stdout', False):
                 # Export to stdout (no file)
                 md_content = conv_manager.export_conversation_to_markdown(conv_id)
                 click.echo(md_content)
                 return
-                
+
             # Otherwise, determine output path for file
             output_path = kwargs.get('export_path')
             if not output_path:
@@ -367,10 +367,10 @@ def main(**kwargs: Any) -> None:
                         # This shouldn't happen now since we loaded the most recent above
                         click.echo("No conversations found to export.")
                         return
-                
+
                 # Use current directory if no path specified
                 output_path = os.path.join(os.getcwd(), filename)
-            
+
             # Export the conversation to file
             result = conv_manager.export_conversation_to_markdown(conv_id, output_path)
             click.echo(f"Conversation exported to: {result}")
@@ -392,10 +392,10 @@ def main(**kwargs: Any) -> None:
         project_name = post_slug(kwargs['project_name'], '-', False, 24)
     if not project_name:
         project_name = 'noproj'
-        
+
     # Handle active conversation
     active_conversation = None
-    
+
     # Load specific conversation if requested
     if kwargs['conversation_id']:
         active_conversation = conv_manager.load_conversation(kwargs['conversation_id'])
@@ -403,7 +403,7 @@ def main(**kwargs: Any) -> None:
             click.echo(f"Error: Conversation {kwargs['conversation_id']} not found.")
             return
         logger.info(f"Loaded conversation: {active_conversation.id}")
-        
+
     # Continue most recent conversation if requested
     elif kwargs['continue_conv'] and not kwargs['new_conversation']:
         active_conversation = conv_manager.get_most_recent_conversation()
@@ -412,7 +412,7 @@ def main(**kwargs: Any) -> None:
             logger.info("No previous conversations found to continue, creating new conversation.")
         else:
             logger.info(f"Continuing conversation: {active_conversation.id}")
-            
+
     # Create a new conversation if needed
     if (active_conversation is None) or kwargs['new_conversation']:
         # Get system prompt either from template or defaults
@@ -420,7 +420,7 @@ def main(**kwargs: Any) -> None:
         if system_prompt:
             # Apply any spacetime placeholders
             system_prompt = spacetime_placeholders(system_prompt)
-            
+
         # Create new conversation with optional title and model metadata
         conversation_metadata = {
           'model': kwargs.get('model'),
@@ -428,7 +428,7 @@ def main(**kwargs: Any) -> None:
           'max_tokens': kwargs.get('max_tokens'),
           'template': kwargs.get('template')
         }
-        
+
         active_conversation = conv_manager.new_conversation(
           system_prompt=system_prompt,
           title=kwargs.get('title'),
@@ -481,13 +481,13 @@ def main(**kwargs: Any) -> None:
     if not canonical_model:
         click.echo(f"Model '{kwargs['model']}' not found", err=True)
         sys.exit(1)
-        
+
     kwargs['model'] = canonical_model
 
     # Get API keys and initialize clients
     api_keys = get_api_keys()
     clients = initialize_clients(api_keys)
-    
+
     # Validate API keys based on model
     api_key_type = model_parameters.get('apikey', '')
     if api_key_type and not api_keys.get(api_key_type, ''):
@@ -497,18 +497,18 @@ def main(**kwargs: Any) -> None:
 
     # Handle either the long form or short form of print_systemprompt flag
     show_full_systemprompt = kwargs.get('print_systemprompt', False)
-    
+
     if kwargs['status']:
-        display_status(kwargs, query_texts, config, model_parameters, 
+        display_status(kwargs, query_texts, config, model_parameters,
                       show_full_systemprompt, active_conversation)
         return
-        
+
     # Add existing messages from conversation if they exist
     conversation_messages = []
     if active_conversation and active_conversation.messages:
         # Remove system message from the extracted messages
         conversation_messages = active_conversation.get_messages_for_llm(include_system=False)
-        
+
         if conversation_messages:
             logger.debug(f"Using {len(conversation_messages)} messages from conversation history")
             # If we have conversation history, add it to messages list
@@ -532,16 +532,16 @@ def main(**kwargs: Any) -> None:
                 kb_parts = kb_path.split('/')
                 if len(kb_parts) == 2:
                     kb_path = os.path.join(vectordbs_path, kb_parts[0], f"{kb_parts[1]}.cfg")
-            
+
             # Check if we should bypass knowledgebase errors and continue anyway
             bypass_kb_errors = os.environ.get('DV2_BYPASS_KB_ERRORS', 'false').lower() == 'true'
-            
+
             try:
                 knowledgebase_string = get_knowledgebase_string(
-                    kb_path, 
-                    knowledgebase_query, 
-                    customkb_executable, 
-                    vectordbs_path, 
+                    kb_path,
+                    knowledgebase_query,
+                    customkb_executable,
+                    vectordbs_path,
                     api_keys
                 )
             except Exception as e:
@@ -550,7 +550,7 @@ def main(**kwargs: Any) -> None:
                     error_msg = f"Error: Invalid OpenAI API key when querying knowledgebase. Please check your OPENAI_API_KEY environment variable."
                 else:
                     error_msg = f"Error querying knowledgebase: {str(e)}"
-                
+
                 if bypass_kb_errors:
                     click.echo(f"Warning: {error_msg} (continuing without knowledgebase)", err=True)
                     knowledgebase_string = f"<knowledgebase>\n# Error querying knowledgebase (continuing without it)\n</knowledgebase>\n\n"
@@ -569,7 +569,7 @@ def main(**kwargs: Any) -> None:
     prev_query_text = ''
     output_files = []
     output_order = 0
-    
+
     for query_text in query_texts:
         # if multiple queries, append the result of the previous query results
         if query_result:
@@ -591,11 +591,11 @@ def main(**kwargs: Any) -> None:
         # Combine all parts of the query
         llm_queries_wrapper = ['<LLM_Queries>\n', '\n</LLM_Queries>\n']
         full_query = f"{llm_queries_wrapper[0]}<Query>\n{reference_string}\n{knowledgebase_string}\n{query_result}\n{query_text}\n</Query>{llm_queries_wrapper[1]}\n"
-        
+
         # Add current query to the conversation
         if active_conversation:
             active_conversation.add_message("user", query_text)
-        
+
         # Execute the query
         try:
             query_result = query(
@@ -609,11 +609,11 @@ def main(**kwargs: Any) -> None:
                 model_parameters=model_parameters,
                 api_keys=api_keys
             )
-            
+
             # Add response to conversation
             if active_conversation:
                 active_conversation.add_message("assistant", query_result)
-                
+
                 # Update metadata with the latest parameters
                 # This ensures metadata stays current if parameters were changed mid-conversation
                 active_conversation.metadata.update({
@@ -622,10 +622,10 @@ def main(**kwargs: Any) -> None:
                   'max_tokens': kwargs.get('max_tokens'),
                   'template': kwargs.get('template')
                 })
-                
+
                 # Save after each message to prevent data loss
                 conv_manager.save_conversation(active_conversation)
-                
+
                 # Generate a title if this is a new conversation with default title
                 if (not active_conversation.title or active_conversation.title == 'Untitled Conversation') and len(active_conversation.messages) >= 3:
                     # Simple title generation query function
@@ -645,19 +645,19 @@ def main(**kwargs: Any) -> None:
                             return result
                         except Exception:
                             return "Untitled Conversation"
-                    
+
                     title = conv_manager.suggest_title_from_content(
-                        active_conversation, 
+                        active_conversation,
                         simple_title_query
                     )
                     if title and title != "Untitled Conversation":
                         active_conversation.title = title
                         conv_manager.save_conversation(active_conversation)
                         logger.info(f"Generated conversation title: {title}")
-            
+
             # Display the response
             click.echo(query_result + '\n')
-            
+
             if output_dir:
                 output_order += 1
                 safe_query = "".join(c for c in query_text[:100] if c.isalnum() or c in (' ', '_')).rstrip()
