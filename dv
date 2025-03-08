@@ -1,0 +1,69 @@
+#!/bin/bash
+set -euo pipefail
+
+trim() { 
+  if (($#)); then
+    local v="$*";
+    v="${v#"${v%%[![:blank:]]*}"}";
+    echo -n "${v%"${v##*[![:blank:]]}"}";
+  else
+    local REPLY;
+    while read -r; do
+      REPLY="${REPLY#"${REPLY%%[![:blank:]]*}"}";
+      echo "${REPLY%"${REPLY##*[![:blank:]]}"}";
+    done;
+  fi
+}
+declare -fx trim
+
+declare -- HISTFILEDIR="$HOME/.config/dejavu2-cli/dvhistory"
+mkdir -p "$HISTFILEDIR"
+declare -- HISTFILE="$HISTFILEDIR"/history
+touch "$HISTFILE"
+history -r
+
+declare -- cmd=''
+declare -- conv='--continue'
+
+while ((1)); do
+  read -r -e -p "dv2> " cmd
+  cmd=$(trim "$cmd")
+  [[ -z "$cmd" ]] && continue
+  [[ "$cmd" == exit ]] && break
+
+  if [[ ${cmd:0:1} == '/' ]]; then
+    if [[ "$cmd" == '/list' ]]; then
+      dv2 -O --export-conversation current |md2ansi |less
+    elif [[ "$cmd" == '/new' ]]; then
+      conv='--new-conversation'
+      echo "dv2> A new conversation will start."
+    elif [[ "$cmd" == '/history' ]]; then
+      history
+    elif [[ "$cmd" == '/help' || "$cmd" == '/?' ]]; then
+      echo "Valid commands are /list /new /history"
+    else
+      echo "dv2> Invalid command '$cmd'"
+    fi
+    continue
+  fi
+    
+  history -s "$cmd"
+  history -w
+
+  # shell command
+  [[ "${cmd:0:1}" == '!' ]] && {
+    cmd="${cmd:1}"
+    set +e
+    eval "${cmd}"
+    set -e
+    continue
+  }
+  
+  dv2 $conv --template leet "$cmd" | md2ansi | less
+  echo
+  conv='--continue'
+done
+
+echo "dv2> Bye."
+
+#fin
