@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-trim() { 
+trim() {
   if (($#)); then
     local v="$*";
     v="${v#"${v%%[![:blank:]]*}"}";
@@ -24,6 +24,99 @@ history -r
 
 declare -- cmd=''
 declare -- conv='--continue'
+declare -- template='Leet'
+declare -a DV2_ARGS=()
+
+# TODO: process these command line arguments
+: <<'EOT'
+  -T, --template template (def. Leet)
+  -c, --continue (conv='--continue')
+  -n, --new-conversation (conv='--new-conversation')
+
+  # if defined on the command line, these args should be stored in DV2_ARGS
+  -m, --model model (def. '')
+  -t, --temperature temperature (def '')
+  -k, --knowledgebase knowledgebase (def '')
+  -i, --title title (def '')
+EOT
+
+# commandline processing loop
+while (($#)); do
+  case "$1" in
+    -T|--template)
+      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
+        template="$2"
+        shift 2
+      else
+        echo "Error: Template name required after $1" >&2
+        exit 1
+      fi
+      ;;
+    -c|--continue)
+      conv='--continue'
+      shift
+      ;;
+    -n|--new-conversation)
+      conv='--new-conversation'
+      shift
+      ;;
+    -m|--model)
+      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
+        DV2_ARGS+=("--model" "$2")
+        shift 2
+      else
+        echo "Error: Model name required after $1" >&2
+        exit 1
+      fi
+      ;;
+    -t|--temperature)
+      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
+        DV2_ARGS+=("--temperature" "$2")
+        shift 2
+      else
+        echo "Error: Temperature value required after $1" >&2
+        exit 1
+      fi
+      ;;
+    -k|--knowledgebase)
+      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
+        DV2_ARGS+=("--knowledgebase" "$2")
+        shift 2
+      else
+        echo "Error: Knowledgebase name required after $1" >&2
+        exit 1
+      fi
+      ;;
+    -i|--title)
+      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
+        DV2_ARGS+=("--title" "$2")
+        shift 2
+      else
+        echo "Error: Title required after $1" >&2
+        exit 1
+      fi
+      ;;
+    -h|--help)
+      echo "Usage: $0 [options]"
+      echo "Options:"
+      echo "  -T, --template TEMPLATE    Set template (default: Leet)"
+      echo "  -c, --continue             Continue existing conversation (default)"
+      echo "  -n, --new-conversation     Start a new conversation"
+      echo "  -m, --model MODEL          Specify model"
+      echo "  -t, --temperature VALUE    Set temperature"
+      echo "  -k, --knowledgebase KB     Specify knowledgebase"
+      echo "  -i, --title TITLE          Set conversation title"
+      echo "  -h, --help                 Show this help message"
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $1" >&2
+      echo "Use --help for usage information" >&2
+      exit 1
+      ;;
+  esac
+done
+
 
 while ((1)); do
   read -r -e -p "dv2> " cmd
@@ -33,7 +126,7 @@ while ((1)); do
 
   if [[ ${cmd:0:1} == '/' ]]; then
     if [[ "$cmd" == '/list' ]]; then
-      dv2 -O --export-conversation current |md2ansi |less
+      dv2 -O --export-conversation current | md2ansi | less
     elif [[ "$cmd" == '/new' ]]; then
       conv='--new-conversation'
       echo "dv2> A new conversation will start."
@@ -46,7 +139,7 @@ while ((1)); do
     fi
     continue
   fi
-    
+
   history -s "$cmd"
   history -w
 
@@ -58,8 +151,8 @@ while ((1)); do
     set -e
     continue
   }
-  
-  dv2 $conv --template leet "$cmd" | md2ansi | less
+
+  dv2 $conv --template "$template" "${DV2_ARGS[@]}" "$cmd" | md2ansi | less
   echo
   conv='--continue'
 done
