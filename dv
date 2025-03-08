@@ -1,54 +1,83 @@
 #!/bin/bash
+# dv - Enhanced interactive shell for dejavu2-cli
 set -euo pipefail
 
-trim() {
-  if (($#)); then
-    local v="$*";
-    v="${v#"${v%%[![:blank:]]*}"}";
-    echo -n "${v%"${v##*[![:blank:]]}"}";
-  else
-    local REPLY;
-    while read -r; do
-      REPLY="${REPLY#"${REPLY%%[![:blank:]]*}"}";
-      echo "${REPLY%"${REPLY##*[![:blank:]]}"}";
-    done;
-  fi
-}
-declare -fx trim
+# Colors and formatting
+BOLD="\033[1m"
+RESET="\033[0m"
+GREEN="\033[32m"
+BLUE="\033[34m"
+YELLOW="\033[33m"
+CYAN="\033[36m"
+MAGENTA="\033[35m"
+RED="\033[31m"
+PROMPT_COLOR="${CYAN}"
+HEADER_COLOR="${MAGENTA}"
+CMD_COLOR="${GREEN}"
+WARN_COLOR="${YELLOW}"
+ERROR_COLOR="${RED}"
 
-declare -- HISTFILEDIR="$HOME/.config/dejavu2-cli/dvhistory"
+# Display usage information
+usage() {
+  printf "${BOLD}${HEADER_COLOR}Usage:${RESET} $(basename "$0") [options]\n"
+  printf "\n${BOLD}${HEADER_COLOR}Options:${RESET}\n"
+  printf "  ${BOLD}-T, --template${RESET} TEMPLATE    Set template (default: Leet)\n"
+  printf "  ${BOLD}-c, --continue${RESET}             Continue existing conversation (default)\n"
+  printf "  ${BOLD}-n, --new-conversation${RESET}     Start a new conversation\n"
+  printf "  ${BOLD}-m, --model${RESET} MODEL          Specify model\n"
+  printf "  ${BOLD}-t, --temperature${RESET} VALUE    Set temperature (0.0-1.0)\n"
+  printf "  ${BOLD}-k, --knowledgebase${RESET} KB     Specify knowledgebase\n"
+  printf "  ${BOLD}-i, --title${RESET} TITLE          Set conversation title\n"
+  printf "  ${BOLD}-h, --help${RESET}                 Show this help message\n"
+}
+
+# Helper functions
+trim() { echo -n "${1#"${1%%[![:space:]]*}"}"; }
+
+# Display message with color
+show_message() {
+  local color="$1"
+  local message="$2"
+  printf "${color}%s${RESET}\n" "$message"
+}
+
+# Command help display
+show_commands() {
+  printf "\n${BOLD}${HEADER_COLOR}Available Commands:${RESET}\n"
+  printf "  ${CMD_COLOR}/help${RESET}      - Show this help message\n"
+  printf "  ${CMD_COLOR}/list${RESET}      - List current conversation\n"
+  printf "  ${CMD_COLOR}/new${RESET}       - Start a new conversation\n"
+  printf "  ${CMD_COLOR}/clear${RESET}     - Clear current conversation\n"
+  printf "  ${CMD_COLOR}/history${RESET}   - Show command history\n"
+  printf "  ${CMD_COLOR}/templates${RESET} - List available templates\n"
+  printf "  ${CMD_COLOR}/models${RESET}    - List available models\n"
+  printf "  ${CMD_COLOR}/multi${RESET}     - Enter multiline input mode (^D when done)\n"
+  printf "  ${CMD_COLOR}/exit${RESET}      - Exit the program\n"
+  printf "  ${CMD_COLOR}!command${RESET}   - Execute shell command\n"
+}
+
+# Initialize history
+HISTFILEDIR="$HOME/.config/dejavu2-cli/dvhistory"
 mkdir -p "$HISTFILEDIR"
-declare -- HISTFILE="$HISTFILEDIR"/history
+HISTFILE="$HISTFILEDIR/history"
 touch "$HISTFILE"
 history -r
 
-declare -- cmd=''
-declare -- conv='--continue'
-declare -- template='Leet'
-declare -a DV2_ARGS=()
+# Initialize variables
+cmd=''
+conv='--continue'
+template='Leet'
+DV2_ARGS=()
 
-# TODO: process these command line arguments
-: <<'EOT'
-  -T, --template template (def. Leet)
-  -c, --continue (conv='--continue')
-  -n, --new-conversation (conv='--new-conversation')
-
-  # if defined on the command line, these args should be stored in DV2_ARGS
-  -m, --model model (def. '')
-  -t, --temperature temperature (def '')
-  -k, --knowledgebase knowledgebase (def '')
-  -i, --title title (def '')
-EOT
-
-# commandline processing loop
+# Process command line arguments
 while (($#)); do
   case "$1" in
     -T|--template)
-      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
+      if [[ -n "$2" && "${2:0:1}" != '-' ]]; then
         template="$2"
         shift 2
       else
-        echo "Error: Template name required after $1" >&2
+        show_message "$ERROR_COLOR" "Error: Template name required after $1"
         exit 1
       fi
       ;;
@@ -61,102 +90,133 @@ while (($#)); do
       shift
       ;;
     -m|--model)
-      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
-        DV2_ARGS+=("--model" "$2")
+      if [[ -n "$2" && "${2:0:1}" != '-' ]]; then
+        DV2_ARGS+=('--model' "$2")
         shift 2
       else
-        echo "Error: Model name required after $1" >&2
+        show_message "$ERROR_COLOR" "Error: Model name required after $1"
         exit 1
       fi
       ;;
     -t|--temperature)
-      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
-        DV2_ARGS+=("--temperature" "$2")
+      if [[ -n "$2" && "${2:0:1}" != '-' ]]; then
+        DV2_ARGS+=('--temperature' "$2")
         shift 2
       else
-        echo "Error: Temperature value required after $1" >&2
+        show_message "$ERROR_COLOR" "Error: Temperature value required after $1"
         exit 1
       fi
       ;;
     -k|--knowledgebase)
-      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
-        DV2_ARGS+=("--knowledgebase" "$2")
+      if [[ -n "$2" && "${2:0:1}" != '-' ]]; then
+        DV2_ARGS+=('--knowledgebase' "$2")
         shift 2
       else
-        echo "Error: Knowledgebase name required after $1" >&2
+        show_message "$ERROR_COLOR" "Error: Knowledgebase name required after $1"
         exit 1
       fi
       ;;
     -i|--title)
-      if [[ -n "$2" && "${2:0:1}" != "-" ]]; then
-        DV2_ARGS+=("--title" "$2")
+      if [[ -n "$2" && "${2:0:1}" != '-' ]]; then
+        DV2_ARGS+=('--title' "$2")
         shift 2
       else
-        echo "Error: Title required after $1" >&2
+        show_message "$ERROR_COLOR" "Error: Title required after $1"
         exit 1
       fi
       ;;
     -h|--help)
-      echo "Usage: $0 [options]"
-      echo "Options:"
-      echo "  -T, --template TEMPLATE    Set template (default: Leet)"
-      echo "  -c, --continue             Continue existing conversation (default)"
-      echo "  -n, --new-conversation     Start a new conversation"
-      echo "  -m, --model MODEL          Specify model"
-      echo "  -t, --temperature VALUE    Set temperature"
-      echo "  -k, --knowledgebase KB     Specify knowledgebase"
-      echo "  -i, --title TITLE          Set conversation title"
-      echo "  -h, --help                 Show this help message"
+      usage
       exit 0
       ;;
     *)
-      echo "Unknown option: $1" >&2
-      echo "Use --help for usage information" >&2
+      show_message "$ERROR_COLOR" "Unknown option: $1"
+      printf "Use ${BOLD}--help${RESET} for usage information\n"
       exit 1
       ;;
   esac
 done
 
+# Check for md2ansi installation
+if ! command -v md2ansi >/dev/null; then
+  show_message "$WARN_COLOR" "Installing md2ansi from github"
+  curl -sL https://raw.githubusercontent.com/Open-Technology-Foundation/md2ansi/main/md2ansi-install.sh | bash
+fi
 
+# Display welcome message
+printf "${BOLD}${HEADER_COLOR}DejaVu2 Interactive Shell${RESET}\n"
+printf "${YELLOW}Type ${BOLD}/help${RESET}${YELLOW} for available commands${RESET}\n"
+
+# Main interaction loop
 while ((1)); do
-  read -r -e -p "dv2> " cmd
-  cmd=$(trim "$cmd")
-  [[ -z "$cmd" ]] && continue
-  [[ "$cmd" == exit ]] && break
+  if [[ -n "${MULTILINE:-}" ]]; then
+    # Multiline input mode
+    show_message "$BLUE" "Enter multiline input (^D when done):"
+    tmpfile=$(mktemp)
+    cat > "$tmpfile"
+    cmd=$(<"$tmpfile")
+    rm "$tmpfile"
+    unset MULTILINE
+    echo
+  else
+    # Single line input mode
+    printf "${PROMPT_COLOR}dv>${RESET} "
+    read -r -e cmd
+    cmd=$(trim "$cmd")
+    [[ -z "$cmd" ]] && continue
+    [[ "$cmd" == '/multi' ]] && { MULTILINE=1; continue; }
+  fi
 
+  # Process commands
   if [[ ${cmd:0:1} == '/' ]]; then
-    if [[ "$cmd" == '/list' ]]; then
-      dv2 -O --export-conversation current | md2ansi | less
-    elif [[ "$cmd" == '/new' ]]; then
-      conv='--new-conversation'
-      echo "dv2> A new conversation will start."
-    elif [[ "$cmd" == '/history' ]]; then
-      history
-    elif [[ "$cmd" == '/help' || "$cmd" == '/?' ]]; then
-      echo "Valid commands are /list /new /history"
-    else
-      echo "dv2> Invalid command '$cmd'"
-    fi
+    case "$cmd" in
+      /exit) 
+        show_message "$BLUE" "Goodbye!"
+        exit ;;
+      /list) 
+        dv2 -O --export-conversation current | md2ansi | less ;;
+      /clear)
+        ID="$(dv2 -x | grep -m1 ^ID: | cut -d' ' -f2 || true)"
+        dv2 -X "${ID:-no conv}" || true
+        conv='--new-conversation'
+        show_message "$GREEN" "Conversation cleared" ;;
+      /new)
+        conv='--new-conversation'
+        show_message "$GREEN" "New conversation started" ;;
+      /history) 
+        show_message "$BLUE" "Command history:"
+        history ;;
+      /templates) 
+        show_message "$BLUE" "Available templates:"
+        dv2 -L | less ;;
+      /models) 
+        show_message "$BLUE" "Available models:"
+        dv2 -a | less ;;
+      /help|/\?)
+        show_commands ;;
+      *) show_message "$ERROR_COLOR" "Unknown command: $cmd" ;;
+    esac
     continue
   fi
 
+  # Record in history
   history -s "$cmd"
   history -w
 
-  # shell command
-  [[ "${cmd:0:1}" == '!' ]] && {
-    cmd="${cmd:1}"
+  # Execute shell command
+  if [[ "${cmd:0:1}" == '!' ]]; then
+    show_message "$YELLOW" "Executing: ${cmd:1}"
     set +e
-    eval "${cmd}"
+    eval "${cmd:1}"
     set -e
     continue
-  }
+  fi
 
+  # Send command to dv2
   dv2 $conv --template "$template" "${DV2_ARGS[@]}" "$cmd" | md2ansi | less
-  echo
   conv='--continue'
 done
 
-echo "dv2> Bye."
+show_message "$BLUE" "Exiting."
 
 #fin
