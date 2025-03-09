@@ -212,8 +212,11 @@ while ((1)); do
     continue
   fi
 
-  # Send command to dv2
-  dv2 $conv --template "$template" "${DV2_ARGS[@]}" "$cmd" | md2ansi | less
+  # Send command to dv2 via a temporary file to avoid any quoting issues
+  tmpfile=$(mktemp)
+  echo "$cmd" > "$tmpfile"
+  dv2 $conv --template "$template" "${DV2_ARGS[@]}" "$(< "$tmpfile")" | md2ansi | less
+  rm "$tmpfile"
   conv='--continue'
 done
 
