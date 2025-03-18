@@ -3,11 +3,14 @@
 LLM client handlers for dejavu2-cli.
 
 This module contains client initialization and query functions for
-various LLM providers: OpenAI, Anthropic, Google, and local Ollama models.
+various LLM providers: OpenAI, Anthropic, Google, and both local and remote Ollama models.
 """
 import os
 import logging
 import click
+import json
+import re
+import requests
 from typing import Dict, Any, List, Optional
 
 # Import LLM provider libraries
@@ -31,12 +34,13 @@ def get_api_keys() -> Dict[str, str]:
     api_keys = {
         'ANTHROPIC_API_KEY': os.environ.get('ANTHROPIC_API_KEY', ''),
         'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY', ''),
-        'GOOGLE_API_KEY': os.environ.get('GOOGLE_API_KEY', '')
+        'GOOGLE_API_KEY': os.environ.get('GOOGLE_API_KEY', ''),
+        'OLLAMA_API_KEY': os.environ.get('OLLAMA_API_KEY', 'llama')  # Default to 'llama' if not set
     }
     
     # Log which keys are available (without revealing actual keys)
     available_keys = [name for name, key in api_keys.items() if key]
-    missing_keys = [name for name, key in api_keys.items() if not key]
+    missing_keys = [name for name, key in api_keys.items() if not key and name != 'OLLAMA_API_KEY']
     
     if available_keys:
         logger.info(f"API keys available: {', '.join(available_keys)}")
@@ -93,12 +97,32 @@ def initialize_clients(api_keys: Dict[str, str]) -> Dict[str, Any]:
     else:
         clients['google'] = None
 
-    # Local Ollama client doesn't require API key validation
+    # Initialize both local and remote Ollama clients
     try:
-        clients['ollama'] = OpenAI(base_url='http://localhost:11434/v1', api_key='ollama')
+        # Local Ollama client
+        clients['ollama_local'] = OpenAI(base_url='http://localhost:11434/v1', api_key='ollama')
     except Exception as e:
-        logger.error(f"Ollama client error: {e}")
-        clients['ollama'] = None
+        logger.warning(f"Local Ollama client initialization error: {e}")
+        clients['ollama_local'] = None
+    
+    # Remote Ollama client initialization
+    try:
+        if api_keys.get('OLLAMA_API_KEY'):
+            # The URL format depends on the implementation - we need compatibility with okusi.id API
+            remote_url = 'https://ai.okusi.id/api'
+            # Ensure we have the /v1/chat/completions endpoint
+            if not remote_url.endswith('/v1'):
+                remote_url = f"{remote_url}/v1"
+                
+            clients['ollama'] = OpenAI(
+                base_url=remote_url,
+                api_key=api_keys.get('OLLAMA_API_KEY', 'llama')
+            )
+        else:
+            clients['ollama'] = clients['ollama_local']  # Fallback to local
+    except Exception as e:
+        logger.warning(f"Remote Ollama client initialization error: {e}")
+        clients['ollama'] = clients['ollama_local']  # Fallback to local
     
     return clients
 
@@ -141,12 +165,19 @@ def query_anthropic(
             "anthropic-beta": "output-128k-2025-02-19"
         }
         
+        # Add special beta headers for specific models
+        if 'sonnet' in model:
+            # For any sonnet model
+            extra_headers["anthropic-beta"] = "max-tokens-3-5-sonnet-2024-07-15"
+        elif '3-7' in model:
+            # For Claude 3.7 models
+            extra_headers["anthropic-beta"] = "output-128k-2025-02-19"
+        
         # Prepare messages with conversation history if provided
         messages = []
         
         # Add conversation history if available
         if conversation_messages:
-            logger.debug(f"Including {len(conversation_messages)} previous messages in Anthropic query")
             messages.extend(conversation_messages)
         
         # Add the current query as the last message
@@ -196,7 +227,6 @@ def query_openai(
         ValueError: If the OpenAI API key is missing or invalid
         Exception: If the API request fails
     """
-    logger.debug(f'OpenAI query: model={model}, temperature={temperature}, max_tokens={max_tokens}')
     try:
         # Check if we have a valid client
         if client is None:
@@ -216,7 +246,6 @@ def query_openai(
             
             # Add conversation history if available (excluding system prompts)
             if conversation_messages:
-                logger.debug(f"Including {len(conversation_messages)} previous messages in OpenAI o1/o3 query")
                 # Filter out any system messages as o1/o3 models handle them differently
                 conv_msgs = [m for m in conversation_messages if m["role"] != "system"]
                 messages.extend(conv_msgs)
@@ -224,11 +253,20 @@ def query_openai(
             # Add current query as the final message
             messages.append({"role": "user", "content": query})
             
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                max_completion_tokens=max_tokens,
-            )
+            try:
+                # First try with max_completion_tokens
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    max_completion_tokens=max_tokens,
+                )
+            except Exception as oe:
+                # If that fails, try with just the messages parameter
+                logger.warning(f"Error with max_completion_tokens for {model}, trying without parameters: {oe}")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                )
         # *gpt* Models - standard format
         else:
             # Create base messages list with system prompt
@@ -236,7 +274,6 @@ def query_openai(
             
             # Add conversation history if available
             if conversation_messages:
-                logger.debug(f"Including {len(conversation_messages)} previous messages in OpenAI GPT query")
                 # Standard GPT models can handle conversation history directly
                 for msg in conversation_messages:
                     # Skip system messages as we already added our system prompt
@@ -267,10 +304,14 @@ def query_llama(
     model: str,
     temperature: float,
     max_tokens: int,
-    conversation_messages: List[Dict[str, str]] = None
+    conversation_messages: List[Dict[str, str]] = None,
+    api_keys: Dict[str, str] = None
 ) -> str:
     """
-    Send a query to a local LLaMA-based model via the Ollama server.
+    Send a query to a local or remote LLaMA-based model via an Ollama server.
+    
+    Uses the Ollama /api/chat endpoint to generate responses. Handles both streaming
+    and non-streaming responses in the format documented in the Ollama API.
     
     Args:
         client: OpenAI client configured for Ollama
@@ -280,6 +321,7 @@ def query_llama(
         temperature: Sampling temperature (higher = more random)
         max_tokens: Maximum number of tokens in the response
         conversation_messages: Optional list of previous messages from conversation history
+        api_keys: Dictionary containing API keys
         
     Returns:
         The model's response as a string
@@ -288,14 +330,11 @@ def query_llama(
         Exception: If the Ollama server is not running or returns an error
     """
     try:
-        # No API key check needed for local Ollama server, but check that it's running
-        
         # Build message list starting with system prompt
         messages = [{"role": "system", "content": systemprompt}]
         
         # Add conversation history if available
         if conversation_messages:
-            logger.debug(f"Including {len(conversation_messages)} previous messages in Ollama query")
             # Add conversation history, skipping system messages (we already added our own)
             for msg in conversation_messages:
                 if msg["role"] != "system":
@@ -304,20 +343,165 @@ def query_llama(
         # Add the current query as the final message
         messages.append({"role": "user", "content": query_text})
         
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_tokens=max_tokens
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        # Provide more helpful error message for common Ollama connection issues
-        if "connection refused" in str(e).lower():
-            click.echo(f"Ollama server not running on localhost:11434", err=True)
+        # Convert URL object to string for safer comparison
+        base_url_str = str(client.base_url) if client.base_url else ""
+        is_remote = 'okusi.id' in base_url_str or 'https://' in base_url_str
+        
+        # Prepare request parameters - keeping it simple for Ollama
+        request_params = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "max_tokens": max_tokens
+        }
+        
+        # Only include temperature if it's not zero (Ollama default)
+        if temperature > 0:
+            request_params["temperature"] = temperature
+            
+        # Get the API key
+        api_key = 'ollama'  # Default for local
+        if is_remote and api_keys:
+            api_key = api_keys.get('OLLAMA_API_KEY', 'llama')
+            
+        # Determine the correct URL for chat endpoint
+        if is_remote:
+            # Remote URL format - 'https://ai.okusi.id/api/chat'
+            request_url = base_url_str.replace('/v1', '')
+            if not request_url.endswith('/chat'):
+                request_url = f"{request_url}/chat"
         else:
-            click.echo(f"{model} query failed: {e}", err=True)
+            # Local URL format - 'http://localhost:11434/api/chat'
+            request_url = 'http://localhost:11434/api/chat'
+        
+        # Prepare headers
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+        
+        logger.debug(f"Sending request to Ollama API: {request_url}")
+        
+        try:
+            # Make the HTTP request to the Ollama chat API
+            response = requests.post(
+                request_url,
+                headers=headers,
+                json=request_params,
+                timeout=60
+            )
+            
+            # Check for error response
+            if response.status_code != 200:
+                # Try to extract error message from JSON response
+                try:
+                    error_data = response.json()
+                    if 'error' in error_data:
+                        logger.error(f"Ollama API error: {error_data['error']}")
+                        raise ValueError(f"Ollama API error: {error_data['error']}")
+                except json.JSONDecodeError:
+                    pass
+                    
+                # Generic error if we couldn't parse the error message
+                logger.error(f"Request failed with status {response.status_code}: {response.text}")
+                raise ValueError(f"API error: {response.status_code} - {response.text}")
+            
+            # Process the response
+            response_text = response.text
+            
+            # Handle line-delimited JSON responses (streaming format)
+            if '\n' in response_text and response_text.strip().startswith('{'):
+                return _parse_streaming_response(response_text)
+            
+            # Handle single JSON object response (non-streaming format)
+            try:
+                data = json.loads(response_text)
+                
+                # Check for the standard Ollama chat endpoint format
+                if 'message' in data and 'content' in data['message']:
+                    # Extract metadata for logging if available
+                    if data.get('done', False):
+                        _log_response_metadata(data, model)
+                    
+                    # Check for model unloading
+                    if data.get('done_reason') == 'unload':
+                        logger.warning(f"Model {model} was unloaded during processing")
+                    
+                    return data['message']['content']
+                
+                # For generate endpoint fallback (API variation)
+                elif 'response' in data:
+                    # Log warning about unexpected format
+                    logger.warning(f"Received 'response' format instead of 'message.content' format")
+                    return data['response']
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                
+                # If it doesn't look like JSON, return the raw text as a last resort
+                if not (response_text.strip().startswith('{') or response_text.strip().startswith('[')):
+                    return response_text
+                    
+                raise ValueError(f"Failed to parse response from Ollama API: {e}")
+            
+            # If we got here, we couldn't extract the content
+            raise ValueError("Failed to extract content from Ollama API response")
+            
+        except requests.RequestException as e:
+            logger.error(f"HTTP request failed: {e}")
+            raise ValueError(f"Connection error: {e}")
+    except Exception as e:
+        # Error has already been logged, just pass it up
+        logger.error(f"{model} query failed: {e}")
         raise
+
+def _parse_streaming_response(response_text: str) -> str:
+    """Parse a streaming response from the Ollama API."""
+    full_content = ""
+    final_metadata = None
+    
+    # Process each line as a separate JSON object
+    for line in response_text.splitlines():
+        if not line or not line.strip():
+            continue
+            
+        try:
+            # Parse the line as JSON
+            json_obj = json.loads(line)
+            
+            # Check if this is the standard chat endpoint format
+            if 'message' in json_obj and 'content' in json_obj['message']:
+                full_content += json_obj['message']['content']
+                
+                # Store metadata from the final response
+                if json_obj.get('done', False):
+                    final_metadata = json_obj
+            
+            # If this is the last chunk, log metadata
+            if json_obj.get('done', False) and final_metadata:
+                _log_response_metadata(final_metadata, json_obj.get('model', 'unknown'))
+                
+        except json.JSONDecodeError:
+            # Skip invalid JSON lines
+            continue
+    
+    return full_content
+
+def _log_response_metadata(data: Dict[str, Any], model: str) -> None:
+    """Log useful metadata from the Ollama API response."""
+    metadata_fields = [
+        'total_duration', 'load_duration', 'prompt_eval_count',
+        'prompt_eval_duration', 'eval_count', 'eval_duration'
+    ]
+    
+    metadata = {field: data.get(field) for field in metadata_fields if field in data}
+    
+    if metadata:
+        # Convert nanoseconds to milliseconds for readability
+        for field in ['total_duration', 'load_duration', 'prompt_eval_duration', 'eval_duration']:
+            if field in metadata and metadata[field]:
+                metadata[field] = f"{metadata[field] / 1000000:.2f}ms"
+                
+        logger.debug(f"Model {model} response metadata: {metadata}")
 
 def query_gemini(
     query: str,
@@ -362,8 +546,6 @@ def query_gemini(
         
         # For Gemini, we need to handle conversation history differently
         if conversation_messages and len(conversation_messages) > 0:
-            logger.debug(f"Including {len(conversation_messages)} previous messages in Gemini query")
-            
             # Create Gemini chat session
             model_obj = genai.GenerativeModel(model, generation_config=gen_config)
             chat = model_obj.start_chat(history=[])
@@ -482,16 +664,13 @@ def query(
         ValueError: If an unknown model is specified
     """
     logger.info(f"Processing query using model: {model}")
-    logger.debug(f"Query parameters: temperature={temperature}, max_tokens={max_tokens}")
     
     # Check if conversation history is included
     conversation_messages = None
     if messages:
-        logger.debug(f"Including {len(messages)} previous messages from conversation history")
         conversation_messages = messages
     
     # Ensure max_tokens doesn't exceed model limit
-    original_max_tokens = max_tokens
     model_max_tokens = model_parameters.get('max_output_tokens', 4000)
     if max_tokens > model_max_tokens:
         logger.warning(
@@ -504,25 +683,13 @@ def query(
     from utils import spacetime_placeholders
     original_systemprompt = systemprompt
     systemprompt = spacetime_placeholders(systemprompt)
-    if systemprompt != original_systemprompt:
-        logger.debug("Applied spacetime replacements to system prompt")
 
-    # Determine provider based on model name
+    # Determine provider based on family, then model name as fallback
+    model_family = model_parameters.get('family', '').lower()
+    
     try:
-        if model.startswith(('gpt', 'chatgpt', 'o1', 'o3')):
-            logger.debug(f"Routing to OpenAI API with model: {model}")
-            client = clients.get('openai')
-            if client is None:
-                logger.error("OpenAI client not available, API key might be missing")
-                raise ValueError("OpenAI client not available. Please check API key.")
-                
-            return query_openai(
-                client, query_text, systemprompt, model, 
-                temperature, max_tokens, conversation_messages
-            )
-            
-        elif model.startswith('claude'):
-            logger.debug(f"Routing to Anthropic API with model: {model}")
+        # Route based on model family first (matches llm_query.php behavior)
+        if model_family == 'anthropic':
             client = clients.get('anthropic')
             if client is None:
                 logger.error("Anthropic client not available, API key might be missing")
@@ -533,20 +700,80 @@ def query(
                 temperature, max_tokens, conversation_messages
             )
             
-        elif model.startswith('llama') or model.startswith('nemo'):
-            logger.debug(f"Routing to local Ollama with model: {model}")
-            client = clients.get('ollama')
+        elif model_family == 'google':
+            if not api_keys.get('GOOGLE_API_KEY'):
+                logger.error("Google API key not available")
+                raise ValueError("Google API key not available. Please check environment variables.")
+                
+            return query_gemini(
+                query_text, systemprompt, model, temperature, max_tokens, 
+                api_keys['GOOGLE_API_KEY'], conversation_messages
+            )
+            
+        elif model_family == 'ollama':
+            # Determine if we should use local or remote client based on URL
+            model_url = model_parameters.get('url', '')
+            client = None
+            
+            # Convert URL to string for safer comparison
+            model_url_str = str(model_url) if model_url else ""
+            
+            # Check for specific remote URL patterns
+            if any(pattern in model_url_str for pattern in ['okusi.id', 'https://', 'http://', 'api']):
+                # Use remote client
+                client = clients.get('ollama')
+                if client is None:
+                    client = clients.get('ollama_local')
+            else:
+                # Use local client
+                client = clients.get('ollama_local', clients.get('ollama'))
+                
             if client is None:
                 logger.error("Ollama client not available, local server might not be running")
                 raise ValueError("Ollama client not available. Is the Ollama server running?")
                 
             return query_llama(
                 client, query_text, systemprompt, model, 
+                temperature, max_tokens, conversation_messages,
+                api_keys=api_keys
+            )
+            
+        elif model_family == 'openai' or model.startswith(('gpt', 'chatgpt', 'o1', 'o3')):
+            client = clients.get('openai')
+            if client is None:
+                logger.error("OpenAI client not available, API key might be missing")
+                raise ValueError("OpenAI client not available. Please check API key.")
+                
+            return query_openai(
+                client, query_text, systemprompt, model, 
                 temperature, max_tokens, conversation_messages
             )
             
+        # Fallback to model name prefixes if family not recognized
+        elif model.startswith('claude'):
+            client = clients.get('anthropic')
+            if client is None:
+                logger.error("Anthropic client not available, API key might be missing")
+                raise ValueError("Anthropic client not available. Please check API key.")
+                
+            return query_anthropic(
+                client, query_text, systemprompt, model, 
+                temperature, max_tokens, conversation_messages
+            )
+            
+        elif model.startswith(('llama', 'nemo', 'gemma')):
+            client = clients.get('ollama')
+            if client is None:
+                logger.error("Ollama client not available, server might not be running")
+                raise ValueError("Ollama client not available. Is the Ollama server running?")
+                
+            return query_llama(
+                client, query_text, systemprompt, model, 
+                temperature, max_tokens, conversation_messages,
+                api_keys=api_keys
+            )
+            
         elif model.startswith('gemini'):
-            logger.debug(f"Routing to Google Gemini API with model: {model}")
             if not api_keys.get('GOOGLE_API_KEY'):
                 logger.error("Google API key not available")
                 raise ValueError("Google API key not available. Please check environment variables.")
@@ -557,9 +784,11 @@ def query(
             )
             
         else:
-            logger.error(f"Unknown model '{model}', cannot route query")
-            raise ValueError(f"Unknown model '{model}'. Check Models.json for available models.")
+            logger.error(f"Unknown model family '{model_family}' for model '{model}', cannot route query")
+            raise ValueError(f"Unknown model family '{model_family}' for model '{model}'. Check Models.json for available models.")
             
     except Exception as e:
         logger.error(f"Error querying model {model}: {str(e)}", exc_info=True)
         raise
+        
+#fin

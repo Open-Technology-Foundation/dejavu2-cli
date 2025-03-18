@@ -1,0 +1,15 @@
+chatgpt
+claude2
+claude3
+claude35
+claude37
+claude3haiku
+claude3opus
+claude3sonnet
+gemini
+gpt35
+gpt4
+llama3
+o1
+o3
+ollama

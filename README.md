@@ -4,13 +4,13 @@ A powerful command-line interface for interacting with various Large Language Mo
 
 ## Overview
 
-`dejavu2-cli` (`dv2` for short) is a versatile command-line tool designed for executing one-shot queries to multiple language models, including those from OpenAI, Anthropic, and local LLaMA-based models via the Ollama server.
+`dejavu2-cli` (`dv2` for short) is a versatile command-line tool designed for executing one-shot queries to multiple language models, including those from OpenAI, Anthropic, Google, and local models via the Ollama server.
 
-The `dv2` tool allows users to interact with LLMs efficiently by providing a range of customizable options, and supports context inclusion through reference files and `customKB` knowledge bases.
+The `dv2` tool allows users to interact with LLMs efficiently by providing a range of customizable options, and supports context inclusion through reference files and `customKB` knowledge bases. The tool seamlessly handles different model APIs, response formats, and maintains conversation history for contextual interactions.
 
 ## Features
 
-- **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, and LLaMA models by specifying the model name or using predefined aliases.
+- **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, Gemini models, and LLaMA models by specifying the model name or using predefined aliases.
 - **Conversation History**: Maintain context across multiple interactions with saved conversation history, allowing for follow-up questions and continued discussions.
 - **Customizable Parameters**: Fine-tune responses by adjusting parameters like temperature, maximum tokens, and system prompts directly from the command line.
 - **Contextual Inputs**: Enhance queries by including content from reference text files or customKB knowledge bases, allowing for richer and more informed responses.
@@ -19,6 +19,8 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 - **Listing and Editing Tools**: List available models, templates, customKB knowledge bases, and conversations. Edit configuration and template files directly from the command line.
 - **Status Display**: Preview the current state of all arguments, options, and conversation context before executing a query.
 - **Model-Specific Parameter Handling**: Automatically adjusts parameters for different model types (like OpenAI's O1/O3 models) to ensure compatibility.
+- **Robust API Integration**: Handles various API response formats, particularly for Ollama chat endpoints, with graceful fallback mechanisms for different JSON structures.
+- **Metadata Tracking**: Captures and logs useful metadata from model responses for performance monitoring and debugging.
 
 ## Table of Contents
 
@@ -88,6 +90,31 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
    - **Claude Models**: Similar to OpenAI but with some differences in prompt handling.
    - **Google/Gemini Models**: Requires Google API key and uses a different client library.
    - **Local Models via Ollama**: Requires the Ollama server to be running locally on port 11434.
+   - **Remote Ollama Models**: Can connect to remote Ollama instances with special handling for models with colons in their names (like "gemma3:4b").
+
+#### Ollama API Integration
+
+The tool includes robust handling for Ollama API responses, particularly for the chat endpoint:
+
+- Supports both local (http://localhost:11434/api/chat) and remote (https://ai.okusi.id/api/chat) Ollama servers
+- Handles streaming and non-streaming JSON responses with appropriate parsing
+- Processes various response formats from the chat endpoint:
+  ```json
+  {
+    "model": "llama3.2",
+    "message": {
+      "role": "assistant",
+      "content": "Response text..."
+    },
+    "done": true
+  }
+  ```
+- Extracts and logs metadata from completed responses:
+  - `total_duration`: Total processing time in milliseconds
+  - `load_duration`: Time taken to load the model
+  - `prompt_eval_count`: Number of tokens in the prompt
+  - `eval_count`: Number of tokens generated
+- Provides graceful error handling for various Ollama API error responses
 
 4. **Ensure Ollama Server is Running** (Optional):
 
@@ -629,11 +656,38 @@ The codebase has been modularized for better maintainability:
 - **templates.py**: Template management and display
 - **models.py**: Model information handling and selection
 - **context.py**: Reference files and knowledge base handling
-- **llm_clients.py**: API client initialization and query functions
+- **llm_clients.py**: API client initialization and query functions for different LLM providers
 - **display.py**: Status information display
 - **conversations.py**: Conversation history storage and management
 
 This modular approach makes the code easier to maintain, test, and extend with new features.
+
+### Notable Components
+
+#### LLM Clients Module
+
+The `llm_clients.py` module is responsible for handling all interactions with LLM APIs:
+
+- **OpenAI Client**: Handles both standard and O1/O3 models with their specific requirements
+- **Anthropic Client**: Manages Claude model interactions with appropriate headers
+- **Google Client**: Interfaces with Gemini models through the Google API
+- **Ollama Client**: Supports both local and remote Ollama instances with robust response parsing
+
+The Ollama client was recently updated to:
+- Handle various response formats from the chat endpoint
+- Support models with special naming patterns (like "gemma3:4b")
+- Extract and log useful metadata from responses
+- Provide meaningful error messages for different failure modes
+- Handle both streaming and non-streaming responses
+
+#### Conversations Module
+
+The `conversations.py` module provides a sophisticated conversation management system:
+
+- **Message Storage**: Stores conversations as JSON files with message history
+- **State Management**: Tracks metadata like model, temperature, and creation time
+- **Export Capabilities**: Convert conversations to markdown format for sharing
+- **Context Maintenance**: Preserve context across multiple interactions
 
 ### Coding Standards
 
@@ -642,6 +696,8 @@ All Python code in this project follows these standards:
 - **Line Length**: Maximum 100 characters per line
 - **Naming**: snake_case for variables/functions, PascalCase for classes
 - **Documentation**: Docstrings for all public functions, modules, and classes
+- **Error Handling**: Consistent approach with meaningful error messages
+- **Logging**: Structured logging with appropriate levels
 
 ### Testing
 
@@ -653,6 +709,11 @@ Run tests using the provided script:
 
 This will run unit, integration, and functional tests using pytest.
 
+The test suite includes:
+- **Unit Tests**: Testing individual functions and classes
+- **Integration Tests**: Testing interactions between components
+- **Functional Tests**: Testing end-to-end functionality
+
 ## License
 
 This project is licensed under the GPL-3 License - see the [LICENSE](LICENSE) file for details.
@@ -663,5 +724,5 @@ This project is licensed under the GPL-3 License - see the [LICENSE](LICENSE) fi
 - Claude Code
 - AI Community Contributors
 
-*Current Version: 0.8.4*
+*Current Version: 0.8.5*
 
