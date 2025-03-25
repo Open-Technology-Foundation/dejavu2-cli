@@ -15,7 +15,7 @@ defaults:
 paths:
   prgdir: ""  # Will be set programmatically at runtime
   template_path: Agents.json
-  customkb: /ai/scripts/customkb2/customkb
+  customkb: /ai/scripts/customkb/customkb
 
 # Logging
 logging:
