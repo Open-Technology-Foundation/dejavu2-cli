@@ -13,10 +13,24 @@ import re
 import requests
 from typing import Dict, Any, List, Optional
 
+# Set environment variables to suppress warnings from Google libraries
+import os
+os.environ['GRPC_ENABLE_FORK_SUPPORT'] = '0'
+os.environ['GRPC_PYTHON_LOG_LEVEL'] = 'ERROR'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+
 # Import LLM provider libraries
 from anthropic import Anthropic
 from openai import OpenAI
 import google.generativeai as genai
+
+# Configure ABSL logging to suppress additional warnings
+try:
+    import absl.logging
+    absl.logging.set_verbosity(absl.logging.ERROR)
+    logging.getLogger('absl').propagate = False
+except ImportError:
+    pass
 
 # Setup module logger
 logger = logging.getLogger(__name__)
@@ -503,6 +517,97 @@ def _log_response_metadata(data: Dict[str, Any], model: str) -> None:
                 
         logger.debug(f"Model {model} response metadata: {metadata}")
 
+def _run_gemini_query_in_process(query_data):
+    """
+    Execute Gemini query in a separate process to isolate GRPC warnings.
+    
+    This function runs in an isolated subprocess and handles the Gemini API 
+    interactions. Redirects stderr to suppress all GRPC-related warnings.
+    
+    Args:
+        query_data: Tuple containing (query, system, model, temperature, 
+                   max_tokens, api_key, conversation_messages)
+    
+    Returns:
+        The response text or error message prefixed with "ERROR:"
+    """
+    import os
+    import sys
+    
+    # Redirect stderr to /dev/null to suppress warnings
+    stderr_fd = sys.stderr.fileno()
+    with open(os.devnull, 'w') as devnull:
+        os.dup2(devnull.fileno(), stderr_fd)
+    
+    # Unpack arguments
+    query, system, model, temperature, max_tokens, api_key, conversation_messages = query_data
+    
+    # Import the genai module in this process
+    import google.generativeai as genai
+    
+    try:
+        # Configure the API
+        genai.configure(api_key=api_key)
+        
+        # Set up generation parameters
+        gen_config = genai.types.GenerationConfig(
+            temperature=temperature,
+            max_output_tokens=max_tokens,
+        )
+        
+        # Initialize model and get response based on whether we have conversation history
+        if conversation_messages and len(conversation_messages) > 0:
+            # Create chat session with history
+            model_obj = genai.GenerativeModel(model, generation_config=gen_config)
+            chat = model_obj.start_chat(history=[])
+            
+            # Add system prompt
+            system_prompt = f"<s>\n{system}\n</s>"
+            chat.send_message(system_prompt)
+            
+            # Add conversation history
+            for msg in conversation_messages:
+                if msg["role"] == "user":
+                    chat.send_message(msg["content"])
+                elif msg["role"] == "assistant":
+                    # Add assistant messages to history
+                    history = chat.history
+                    history.append({"role": "model", "parts": [{"text": msg["content"]}]})
+            
+            # Send current query
+            response = chat.send_message(query)
+        else:
+            # Simple query without conversation
+            prompt = f"<s>\n{system}\n</s>\n\n{query}"
+            model_obj = genai.GenerativeModel(model, generation_config=gen_config)
+            response = model_obj.generate_content(prompt)
+        
+        # Extract response text with multiple fallback options
+        result = ""
+        try:
+            # Try standard accessors first
+            if hasattr(response, 'text'):
+                result = response.text
+            elif hasattr(response, 'candidates') and response.candidates:
+                if hasattr(response.candidates[0], 'content'):
+                    result = response.candidates[0].content
+                elif hasattr(response.candidates[0], 'parts'):
+                    result = response.candidates[0].parts[0].text
+                else:
+                    result = str(response.candidates[0])
+            else:
+                result = str(response)
+        except Exception:
+            # Last resort: convert to string
+            if hasattr(response, 'candidates') and response.candidates:
+                result = str(response.candidates[0])
+            else:
+                result = str(response)
+        
+        return result
+    except Exception as e:
+        return f"ERROR: {str(e)}"
+
 def query_gemini(
     query: str,
     system: str,
@@ -515,6 +620,10 @@ def query_gemini(
     """
     Send a query to the Google Gemini API and return the response.
     
+    Uses a subprocess to isolate GRPC warnings and prevent them from being 
+    displayed after successful query completion. Handles both conversation-based
+    and single-query modes.
+    
     Args:
         query: The user's query or prompt
         system: System prompt that guides the model's behavior
@@ -522,6 +631,7 @@ def query_gemini(
         temperature: Sampling temperature (higher = more random)
         max_tokens: Maximum number of tokens in the response
         api_key: Google API key
+        conversation_messages: Optional conversation history
         
     Returns:
         The model's response as a string
@@ -533,60 +643,42 @@ def query_gemini(
     # Check if Google API key is set
     if not api_key:
         raise ValueError("Missing Google API key. Set GOOGLE_API_KEY environment variable.")
-        
+    
     try:
-        # Configure the Gemini API with the key
-        genai.configure(api_key=api_key)
+        # Import multiprocessing here to avoid any circular imports
+        import multiprocessing
         
-        # Create generation config
-        gen_config = genai.types.GenerationConfig(
-            temperature=temperature,
-            max_output_tokens=max_tokens,
-        )
+        # Package all parameters for the subprocess
+        query_data = (query, system, model, temperature, max_tokens, api_key, conversation_messages)
         
-        # For Gemini, we need to handle conversation history differently
-        if conversation_messages and len(conversation_messages) > 0:
-            # Create Gemini chat session
-            model_obj = genai.GenerativeModel(model, generation_config=gen_config)
-            chat = model_obj.start_chat(history=[])
+        # Create an isolated process for Gemini API operations
+        # Using 'spawn' context prevents inheriting file descriptors that could leak GRPC resources
+        ctx = multiprocessing.get_context('spawn')
+        with ctx.Pool(processes=1) as pool:
+            # Run the query in the isolated process
+            result = pool.apply(_run_gemini_query_in_process, (query_data,))
+            pool.close()
+            pool.terminate()
             
-            # Add system message first
-            system_prompt = f"<s>\n{system}\n</s>"
-            chat.send_message(system_prompt)
+        # Handle potential error responses
+        if result and isinstance(result, str) and result.startswith("ERROR:"):
+            raise Exception(result[6:])  # Strip "ERROR:" prefix
             
-            # Add conversation history
-            for msg in conversation_messages:
-                if msg["role"] == "user":
-                    chat.send_message(msg["content"])
-                elif msg["role"] == "assistant":
-                    # We can't directly set assistant messages in Gemini API
-                    # So we'll simulate them in the history
-                    history = chat.history
-                    history.append({"role": "model", "parts": [{"text": msg["content"]}]})
+        # Return valid result
+        if result:
+            return result
             
-            # Send the current query and get response
-            response = chat.send_message(query)
-        else:
-            # Format prompt according to Gemini's requirements for simple queries
-            prompt = f"<s>\n{system}\n</s>\n\n{query}"
-            
-            # Create and call model
-            model_obj = genai.GenerativeModel(model, generation_config=gen_config)
-            response = model_obj.generate_content(prompt)
+        # If we got here without a result, raise an exception
+        raise Exception(f"Model {model} did not return a result")
         
-        # Check if we got a valid response
-        if response and response.text:
-            return response.text
-        raise Exception(f"Model {model} is not supported or did not return a result.")
     except ValueError as ve:
-        # Handle validation errors from the API
+        # Specific handling for API key issues
         if "api_key" in str(ve).lower():
             raise ValueError(f"Invalid Google API key: {ve}")
         raise ve
     except Exception as e:
-        # Log error and provide useful information
-        error_msg = f"{model} query failed: {e}"
-        logger.error(error_msg)
+        # Log and re-raise with additional context
+        logger.error(f"{model} query failed: {e}")
         if "authentication" in str(e).lower():
             raise ValueError(f"{model}: Invalid/expired API key")
         raise
