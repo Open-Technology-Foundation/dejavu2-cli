@@ -1,6 +1,6 @@
 #!/bin/bash
 #shellcheck disable=SC1091
-set -eu
+set -euo pipefail
 PRG0=$(readlink -fn -- "$0")
 PRGDIR=${PRG0%/*}
 source "$PRGDIR"/.venv/bin/activate
