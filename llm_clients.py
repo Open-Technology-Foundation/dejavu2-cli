@@ -246,64 +246,49 @@ def query_openai(
         if client is None:
             raise ValueError("OpenAI client initialization failed. Check API key validity.")
             
-        # o1* Models and o3* models - different prompt format and parameters
-        if model.startswith(('o1', 'o3')):
-            # o1 and o3 models use max_completion_tokens instead of max_tokens
-            # and don't accept temperature parameter
-            
-            # For o1/o3 models, conversation history handling needs to be different
-            # Create base messages with system prompt
-            messages = [
-                {"role": "user", "content": system},
-                {"role": "assistant", "content": "I have read and I understand this."}
-            ]
-            
-            # Add conversation history if available (excluding system prompts)
-            if conversation_messages:
-                # Filter out any system messages as o1/o3 models handle them differently
-                conv_msgs = [m for m in conversation_messages if m["role"] != "system"]
-                messages.extend(conv_msgs)
-            
-            # Add current query as the final message
-            messages.append({"role": "user", "content": query})
-            
-            try:
-                # First try with max_completion_tokens
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                    max_completion_tokens=max_tokens,
-                )
-            except Exception as oe:
-                # If that fails, try with just the messages parameter
-                logger.warning(f"Error with max_completion_tokens for {model}, trying without parameters: {oe}")
-                response = client.chat.completions.create(
-                    model=model,
-                    messages=messages,
-                )
-        # *gpt* Models - standard format
-        else:
-            # Create base messages list with system prompt
-            messages = [{"role": "system", "content": system}]
-            
-            # Add conversation history if available
-            if conversation_messages:
-                # Standard GPT models can handle conversation history directly
-                for msg in conversation_messages:
-                    # Skip system messages as we already added our system prompt
-                    if msg["role"] != "system":
-                        messages.append(msg)
-            
-            # Add current query as the final message
-            messages.append({"role": "user", "content": query})
-            
+        # Create base messages list with system prompt
+        messages = [{"role": "system", "content": system}]
+        
+        # Add conversation history if available
+        if conversation_messages:
+            for msg in conversation_messages:
+                # Skip system messages as we already added our system prompt
+                if msg["role"] != "system":
+                    messages.append(msg)
+        
+        # Add current query as the final message
+        messages.append({"role": "user", "content": query})
+        
+        try:
+            # First try with max_completion_tokens for all OpenAI models
             response = client.chat.completions.create(
                 model=model,
                 messages=messages,
                 temperature=temperature,
-                max_tokens=max_tokens,
-                n=1, stop=''
+                max_completion_tokens=max_tokens,
             )
+        except Exception as oe:
+            # If max_completion_tokens fails, fall back to max_tokens
+            if "max_completion_tokens" in str(oe):
+                logger.warning(f"Error with max_completion_tokens for {model}, trying with max_tokens: {oe}")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    n=1, stop=''
+                )
+            # If that fails too, try without parameter constraints
+            elif "max_tokens" in str(oe):
+                logger.warning(f"Error with max_tokens for {model}, trying without token limit: {oe}")
+                response = client.chat.completions.create(
+                    model=model,
+                    messages=messages,
+                    temperature=temperature,
+                )
+            else:
+                # Re-raise if it's not a token parameter issue
+                raise
         return response.choices[0].message.content
     except Exception as e:
         logger.error(f"Error querying {model}: {e}")
@@ -830,7 +815,7 @@ def query(
                 api_keys=api_keys
             )
             
-        elif model_family == 'openai' or model.startswith(('gpt', 'chatgpt', 'o1', 'o3')):
+        elif model_family == 'openai' or model.startswith(('gpt', 'chatgpt', 'o1', 'o3', 'o4')):
             client = clients.get('openai')
             if client is None:
                 logger.error("OpenAI client not available, API key might be missing")

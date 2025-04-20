@@ -148,7 +148,7 @@
         "max_output_tokens": 8192,
         "token_costs": "$3.00/$15.00",
         "vision": 1,
-        "available": 5,
+        "available": 9,
         "enabled": 1
     },
     "claude-3-7-sonnet-20250219": {
@@ -337,7 +337,7 @@
         "max_output_tokens": 8192,
         "token_costs": "??",
         "vision": 0,
-        "available": 8,
+        "available": 1,
         "enabled": 1
     },
     "gemini-2.0-pro-exp": {
@@ -357,6 +357,25 @@
         "token_costs": "",
         "vision": 1,
         "available": 7,
+        "enabled": 1
+    },
+    "gemini-2.5-pro-exp-03-25": {
+        "model": "gemini-2.5-pro-exp-03-25",
+        "alias": "gemini25proexp",
+        "parent": "Google",
+        "model_category": "LLM",
+        "family": "gemini",
+        "series": "gemini",
+        "description": "",
+        "training_data": "2024-08",
+        "data_cutoff_date": "2024-08",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models",
+        "apikey": "GEMINI_API_KEY",
+        "context_window": 1048576,
+        "max_output_tokens": 65536,
+        "token_costs": "",
+        "vision": 0,
+        "available": 6,
         "enabled": 1
     },
     "gemma3:4b": {
@@ -475,6 +494,63 @@
         "available": 1,
         "enabled": 0
     },
+    "gpt-4.1": {
+        "model": "gpt-4.1",
+        "alias": "gpt41",
+        "parent": "OpenAI",
+        "model_category": "LLM",
+        "family": "gpt4",
+        "series": "gpt4",
+        "description": "",
+        "training_data": "1970-01-01",
+        "data_cutoff_date": "1970-01-01",
+        "url": "https://api.openai.com/v1",
+        "apikey": "OPENAI_API_KEY",
+        "context_window": 1000000,
+        "max_output_tokens": 32000,
+        "token_costs": "200/50/800",
+        "vision": 1,
+        "available": 6,
+        "enabled": 1
+    },
+    "gpt-4.1-mini": {
+        "model": "gpt-4.1-mini",
+        "alias": "gpt41mini",
+        "parent": "OpenAI",
+        "model_category": "LLM",
+        "family": "gpt4",
+        "series": "gpt4",
+        "description": "",
+        "training_data": "1970-01-01",
+        "data_cutoff_date": "1970-01-01",
+        "url": "https://api.openai.com/v1",
+        "apikey": "OPENAI_API_KEY",
+        "context_window": 1000000,
+        "max_output_tokens": 32000,
+        "token_costs": "40/10/160",
+        "vision": 1,
+        "available": 5,
+        "enabled": 1
+    },
+    "gpt-4.1-nano": {
+        "model": "gpt-4.1-nano",
+        "alias": "gpt41nano",
+        "parent": "OpenAI",
+        "model_category": "LLM",
+        "family": "gpt4",
+        "series": "gpt4",
+        "description": "",
+        "training_data": "1970-01-01",
+        "data_cutoff_date": "1970-01-01",
+        "url": "https://api.openai.com/v1",
+        "apikey": "OPENAI_API_KEY",
+        "context_window": 1000000,
+        "max_output_tokens": 32000,
+        "token_costs": "10/2.5/40",
+        "vision": 1,
+        "available": 8,
+        "enabled": 1
+    },
     "gpt-4.5-preview": {
         "model": "gpt-4.5-preview",
         "alias": "gpt45",
@@ -491,7 +567,7 @@
         "max_output_tokens": 16384,
         "token_costs": "$0.03/0.06 per 1K tokens",
         "vision": 0,
-        "available": 6,
+        "available": 9,
         "enabled": 1
     },
     "gpt-4o": {
@@ -507,10 +583,10 @@
         "url": "https://api.openai.com/v1",
         "apikey": "OPENAI_API_KEY",
         "context_window": 128000,
-        "max_output_tokens": 16384,
+        "max_output_tokens": 16370,
         "token_costs": "$0.01/0.03 per 1K tokens",
         "vision": 1,
-        "available": 2,
+        "available": 5,
         "enabled": 1
     },
     "gpt-4o-2024-11-20": {
@@ -566,7 +642,7 @@
         "max_output_tokens": 16384,
         "token_costs": "$0.00157/0.0047 per 1K tokens",
         "vision": 1,
-        "available": 1,
+        "available": 8,
         "enabled": 1
     },
     "gpt-4o-mini-audio-preview": {
@@ -697,7 +773,7 @@
         "max_output_tokens": 32768,
         "token_costs": "$0.15/0.25 per 1K tokens",
         "vision": 0,
-        "available": 6,
+        "available": 9,
         "enabled": 1
     },
     "o1-mini": {
@@ -753,7 +829,7 @@
         "max_output_tokens": 32768,
         "token_costs": "$0.15/0.25 per 1K tokens",
         "vision": 0,
-        "available": 6,
+        "available": 9,
         "enabled": 1
     },
     "o1-preview-2024-09-12": {
@@ -774,6 +850,25 @@
         "available": 6,
         "enabled": 0
     },
+    "o3": {
+        "model": "o3",
+        "alias": "o3",
+        "parent": "OpenAI",
+        "model_category": "LLM",
+        "family": "gpt4",
+        "series": "o3",
+        "description": "",
+        "training_data": "2024-06-01",
+        "data_cutoff_date": "2024-06-01",
+        "url": "https://api.openai.com/v1",
+        "apikey": "OPENAI_API_KEY",
+        "context_window": 200000,
+        "max_output_tokens": 100000,
+        "token_costs": "1000/250/4000",
+        "vision": 1,
+        "available": 7,
+        "enabled": 1
+    },
     "o3-mini": {
         "model": "o3-mini",
         "alias": "o3mini",
@@ -790,6 +885,25 @@
         "max_output_tokens": 32768,
         "token_costs": "",
         "vision": 0,
+        "available": 5,
+        "enabled": 1
+    },
+    "o4-mini": {
+        "model": "o4-mini",
+        "alias": "o4mini",
+        "parent": "OpenAI",
+        "model_category": "LLM",
+        "family": "openai",
+        "series": "o4",
+        "description": "",
+        "training_data": "2024-06-01",
+        "data_cutoff_date": "2024-06-01",
+        "url": "https://api.openai.com/v1",
+        "apikey": "OPENAI_API_KEY",
+        "context_window": 200000,
+        "max_output_tokens": 100000,
+        "token_costs": "110/440",
+        "vision": 1,
         "available": 5,
         "enabled": 1
     },
