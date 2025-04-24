@@ -1,0 +1,49 @@
+#!/bin/bash
+#shellcheck disable=SC2155
+set -euo pipefail
+readonly -- DV2="$(command -v dejavu2 || command -v dv2)"
+readonly -- DV2_agents="$(command -v dv2-agents)"
+
+declare -- outto=/dev/stdout
+
+usage() {
+  echo "usage: $(basename -- "$0") [-a|--update-bash-aliases]"
+  echo "$(basename -- "$0") # display aliases that would be created from $DV2_agents"
+  echo "$(basename -- "$0") -a # add aliases to ~/.bash_aliases"
+  exit "${1:-0}"
+}
+declare -i update_bash_aliases=0
+
+  while (($#)); do case "$1" in
+    -a|--update-bash-aliases)
+        update_bash_aliases=1
+        outto=$(readlink -fn -- ~/.bash_aliases)
+        ;;
+    -h|--help) usage 0 ;;
+    -[ah]*) #shellcheck disable=SC2046 #split up single options
+        set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}";;
+    --) args+=( "$@" ); break ;;
+    -*) >&2 echo "Invalid option '$1'"; exit 22 ;;
+    *)  >&2 echo "Invalid argument '$1'"; exit 2 ;;
+  esac; shift; done
+
+
+declare -a agents=()
+readarray -t agents < <("$DV2_agents" list)
+
+declare -- a agent
+echo >>"$outto"
+for a in "${agents[@]}"; do 
+  agent=${a,,}
+  agent=${agent%% *}
+  if [[ -z "$(command -v "$agent" 2>/dev/null || true)" ]]; then
+    echo "alias ${agent}='${DV2} -T ${agent}'"
+  fi
+done |sort >>"$outto"
+
+if ((update_bash_aliases)); then
+  sort -u "$outto" -o "$outto"
+  echo "'$outto' updated with all dejavu2-cli templates"
+fi
+
+#fin
