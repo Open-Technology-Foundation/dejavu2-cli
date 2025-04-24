@@ -820,7 +820,10 @@ def query(
             if client is None:
                 logger.error("OpenAI client not available, API key might be missing")
                 raise ValueError("OpenAI client not available. Please check API key.")
-                
+
+            if model.startswith(('o1', 'o3', 'o4')):
+                temperature = 1
+                    
             return query_openai(
                 client, query_text, systemprompt, model, 
                 temperature, max_tokens, conversation_messages

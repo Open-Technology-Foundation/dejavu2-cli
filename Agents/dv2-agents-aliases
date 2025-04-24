@@ -19,6 +19,10 @@ declare -i update_bash_aliases=0
         update_bash_aliases=1
         outto=$(readlink -fn -- ~/.bash_aliases)
         ;;
+    -l|--list|list)
+      alias |grep dejavu |cut -d' ' -f2- |cut -d'=' -f1 |column || true
+      exit 0
+      ;;
     -h|--help) usage 0 ;;
     -[ah]*) #shellcheck disable=SC2046 #split up single options
         set -- '' $(printf -- "-%c " $(grep -o . <<<"${1:1}")) "${@:2}";;
@@ -42,6 +46,7 @@ for a in "${agents[@]}"; do
 done |sort >>"$outto"
 
 if ((update_bash_aliases)); then
+  echo "alias dv2-agents-aliases.list='alias |grep dejavu |cut -d" " -f2- |cut -d"=" -f1 |column '" >>"$outto"
   sort -u "$outto" -o "$outto"
   echo "'$outto' updated with all dejavu2-cli templates"
 fi
