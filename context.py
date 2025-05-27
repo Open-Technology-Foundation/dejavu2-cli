@@ -14,6 +14,17 @@ import xml.sax.saxutils
 from glob import glob
 from typing import Optional
 
+# Import security functions
+from security import (
+    validate_knowledgebase_query, 
+    validate_file_path,
+    get_knowledgebase_subprocess,
+    SecurityError,
+    ValidationError
+)
+
+from errors import ReferenceError, KnowledgeBaseError
+
 logger = logging.getLogger(__name__)
 
 def get_reference_string(reference: str) -> str:
@@ -30,27 +41,47 @@ def get_reference_string(reference: str) -> str:
         String containing the formatted reference content, or empty string if no reference
         
     Raises:
-        FileNotFoundError: If any of the reference files cannot be found
-        IOError: If there's an error reading any of the files
+        ReferenceError: If any of the reference files cannot be found, read, or contain invalid paths
     """
     if not reference:
         return ''
+        
     reference_string = ''
     reference_files = [file_name.strip() for file_name in reference.split(',')]
+    
     for file_name in reference_files:
         try:
-            base_name = os.path.splitext(os.path.basename(file_name))[0]
-            with open(file_name, 'r', encoding='utf-8') as f:
+            # Validate file path for security
+            safe_file_path = validate_file_path(file_name, must_exist=True)
+            
+            base_name = os.path.splitext(os.path.basename(safe_file_path))[0]
+            # Escape the base name for XML safety
+            safe_base_name = xml.sax.saxutils.escape(base_name)
+            
+            with open(safe_file_path, 'r', encoding='utf-8') as f:
                 reference_content = f.read().strip()
+                # Escape content for XML safety
                 reference_content = xml.sax.saxutils.escape(reference_content)
 
-            reference_string += f'<reference name="{base_name}">\n{reference_content}\n</reference>\n\n'
-        except FileNotFoundError:
-            click.echo(f"File not found: '{file_name}'", err=True)
-            raise
-        except IOError as e:
-            click.echo(f"Cannot read '{file_name}': {e}", err=True)
-            raise
+            reference_string += f'<reference name="{safe_base_name}">\n{reference_content}\n</reference>\n\n'
+            
+        except ValidationError as e:
+            error_msg = f"Invalid reference file path '{file_name}': {e}"
+            logger.error(error_msg)
+            raise ReferenceError(error_msg)
+        except FileNotFoundError as e:
+            error_msg = f"Reference file not found: '{file_name}'"
+            logger.error(error_msg)
+            raise ReferenceError(error_msg)
+        except (IOError, OSError) as e:
+            error_msg = f"Cannot read reference file '{file_name}': {e}"
+            logger.error(error_msg)
+            raise ReferenceError(error_msg)
+        except UnicodeDecodeError as e:
+            error_msg = f"Cannot decode reference file '{file_name}': {e}"
+            logger.error(error_msg)
+            raise ReferenceError(error_msg)
+            
     return reference_string
 
 
@@ -77,64 +108,93 @@ def get_knowledgebase_string(
         String containing the formatted knowledge base results, or empty string if no knowledge base
         
     Raises:
-        FileNotFoundError: If the knowledge base cannot be found
-        subprocess.CalledProcessError: If the customKB query fails
-        Exception: For other unexpected errors
+        KnowledgeBaseError: If the knowledge base cannot be found, executed, or contains invalid paths/queries
     """
     if not knowledgebase:
         return ''
+    
+    try:
+        # Validate and sanitize the query input
+        safe_query = validate_knowledgebase_query(knowledgebase_query)
         
-    # Handle various knowledgebase path formats
-    if not knowledgebase.endswith('.cfg'):
-        # Could be a simple name, a relative path or a structured path
-        if '/' in knowledgebase:
-            # Path-like format (e.g., "okusi/okusiassociates")
-            # This is already handled in the calling code to create full path
-            pass
-        else:
-            # Simple name without path, append .cfg
-            knowledgebase = f"{knowledgebase}.cfg"
-            
-    # Search for the knowledgebase file if it doesn't exist directly
-    if not os.path.exists(knowledgebase):
-        # Try with VECTORDBS_PATH environment variable if set
-        vectordbs_env = os.environ.get('VECTORDBS', vectordbs_path)
-        search_pattern = os.path.join(vectordbs_env, '**', os.path.basename(knowledgebase))
-        matches = glob(search_pattern, recursive=True)
-        if matches:
-            knowledgebase = matches[0]
-        else:
-            # Fallback to default path
-            search_pattern = os.path.join(vectordbs_path, '**', os.path.basename(knowledgebase))
+        # Validate the customkb executable path
+        safe_executable = validate_file_path(customkb_executable, must_exist=True)
+        
+        # Handle various knowledgebase path formats
+        if not knowledgebase.endswith('.cfg'):
+            # Could be a simple name, a relative path or a structured path
+            if '/' in knowledgebase:
+                # Path-like format (e.g., "okusi/okusiassociates")
+                # This is already handled in the calling code to create full path
+                pass
+            else:
+                # Simple name without path, append .cfg
+                knowledgebase = f"{knowledgebase}.cfg"
+        
+        # Validate the knowledgebase path
+        safe_knowledgebase = validate_file_path(knowledgebase)
+                
+        # Search for the knowledgebase file if it doesn't exist directly
+        if not os.path.exists(safe_knowledgebase):
+            # Try with VECTORDBS_PATH environment variable if set
+            vectordbs_env = os.environ.get('VECTORDBS', vectordbs_path)
+            search_pattern = os.path.join(vectordbs_env, '**', os.path.basename(safe_knowledgebase))
             matches = glob(search_pattern, recursive=True)
             if matches:
-                knowledgebase = matches[0]
+                safe_knowledgebase = validate_file_path(matches[0], must_exist=True)
             else:
-                logger.error(f"Knowledgebase file '{knowledgebase}' not found in {vectordbs_path}")
-                raise FileNotFoundError(f"Knowledgebase file '{knowledgebase}' not found")
+                # Fallback to default path
+                search_pattern = os.path.join(vectordbs_path, '**', os.path.basename(safe_knowledgebase))
+                matches = glob(search_pattern, recursive=True)
+                if matches:
+                    safe_knowledgebase = validate_file_path(matches[0], must_exist=True)
+                else:
+                    error_msg = f"Knowledgebase file '{knowledgebase}' not found in {vectordbs_path}"
+                    logger.error(error_msg)
+                    raise KnowledgeBaseError(error_msg)
 
-    try:
-        # Set environment variables for the subprocess
-        env = os.environ.copy()
+        # Get secure subprocess for knowledge base operations
+        secure_subprocess = get_knowledgebase_subprocess()
         
-        # Make sure we pass the API keys to the subprocess
-        for key, value in api_keys.items():
-            if value:
-                env[key] = value
+        # Update environment whitelist to include the API keys that are actually set
+        if secure_subprocess.config.environment_whitelist:
+            env_vars = []
+            for key in secure_subprocess.config.environment_whitelist:
+                if key in api_keys and api_keys[key]:
+                    env_vars.append(key)
+            secure_subprocess.config.environment_whitelist = env_vars
         
-        logger.info(f"Running customkb query with: {customkb_executable} query {knowledgebase} {knowledgebase_query} --context")
+        logger.info(f"Running secure customkb query: {os.path.basename(safe_executable)} query [knowledgebase] [query] --context")
         
-        result = subprocess.run(
-            [customkb_executable, 'query', knowledgebase, knowledgebase_query, '--context'],
-            capture_output=True, text=True, check=True, env=env
+        # Execute with security validation
+        result = secure_subprocess.run(
+            [safe_executable, 'query', safe_knowledgebase, safe_query, '--context']
         )
-        return f'<knowledgebase>\n{result.stdout.strip()}\n</knowledgebase>\n\n'
+        
+        # Escape the output for XML safety
+        safe_output = xml.sax.saxutils.escape(result.stdout.strip())
+        return f'<knowledgebase>\n{safe_output}\n</knowledgebase>\n\n'
+        
+    except ValidationError as e:
+        error_msg = f"Invalid knowledge base query: {e}"
+        logger.error(error_msg)
+        raise KnowledgeBaseError(error_msg)
+    except SecurityError as e:
+        error_msg = f"Security error in knowledge base query: {e}"
+        logger.error(error_msg)
+        raise KnowledgeBaseError(error_msg)
     except subprocess.CalledProcessError as e:
-        logger.error(f"Error querying knowledgebase: {e.stderr.strip()}")
-        raise
+        error_msg = f"Knowledge base executable failed: {e}"
+        logger.error(error_msg)
+        raise KnowledgeBaseError(error_msg)
+    except (OSError, IOError) as e:
+        error_msg = f"Error executing knowledge base query: {e}"
+        logger.error(error_msg)
+        raise KnowledgeBaseError(error_msg)
     except Exception as e:
-        logger.error(f"Unexpected error querying knowledgebase: {e}")
-        raise
+        error_msg = f"Unexpected error querying knowledgebase: {e}"
+        logger.error(error_msg)
+        raise KnowledgeBaseError(error_msg)
 
 
 def list_knowledge_bases(vectordbs_path: str) -> list:
@@ -151,10 +211,12 @@ def list_knowledge_bases(vectordbs_path: str) -> list:
         List of canonical paths to knowledge base files
         
     Raises:
-        ValueError: If the vectordbs_path is not a valid directory
+        KnowledgeBaseError: If the vectordbs_path is not a valid directory
     """
     if not os.path.isdir(vectordbs_path):
-        raise ValueError(f"'{vectordbs_path}' is not a valid directory")
+        error_msg = f"Knowledge base directory '{vectordbs_path}' is not a valid directory"
+        logger.error(error_msg)
+        raise KnowledgeBaseError(error_msg)
 
     knowledge_bases = set()  # Using set to automatically handle duplicates
     search_path = os.path.join(vectordbs_path, '**', '*.cfg')

@@ -39,8 +39,10 @@ The `dv2` tool allows users to interact with LLMs efficiently by providing a ran
 
 ### Prerequisites
 
-- **Python 3.7** or higher
+- **Python 3.7** or higher (Python 3.8+ recommended for best compatibility)
 - **pip** package manager
+- **Git** (for cloning the repository)
+- One or more LLM provider API keys (see Environment Variables section below)
 
 ### Steps
 
@@ -718,11 +720,32 @@ The test suite includes:
 
 This project is licensed under the GPL-3 License - see the [LICENSE](LICENSE) file for details.
 
-## Authors
+## Authors and Contributors
 
-- Gary Dean
-- Claude Code
-- AI Community Contributors
+- **Gary Dean** - Lead Developer
+- **Claude Code** - Documentation and Code Enhancement
+- **AI Community Contributors** - Feature requests, bug reports, and improvements
 
-*Current Version: 0.8.5*
+### Contributing
+
+We welcome contributions! Please see the [CLAUDE.md](CLAUDE.md) file for development guidelines and coding standards.
+
+### Support
+
+If you encounter issues or have feature requests:
+- Check existing issues on GitHub
+- Create a new issue with detailed information
+- Follow the project for updates
+
+## Project Status
+
+**Current Version**: 0.8.22 (Active Development)
+
+This project is in active development with regular updates and improvements. Check the [GitHub repository](https://github.com/Open-Technology-Foundation/dejavu2-cli) for the latest releases and features.
+
+### Recent Updates
+- Enhanced conversation management system
+- Improved error handling and security validation
+- Extended LLM provider support
+- Better Ollama integration for local models
 

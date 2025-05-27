@@ -13,6 +13,7 @@ from pathlib import Path
 # Import modules from the application
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from conversations import Message, Conversation, ConversationManager
+from errors import ConversationError
 
 class TestMessage:
   """Test the Message class."""
@@ -396,16 +397,15 @@ class TestConversationManager:
         # Verify it exists
         assert os.path.exists(conv_path)
         
-        # Delete it
-        result = manager.delete_conversation("test-id")
-        assert result is True
+        # Delete it (should not raise exception)
+        manager.delete_conversation("test-id")
         
         # Verify it's gone
         assert not os.path.exists(conv_path)
         
         # Test deleting a non-existent conversation
-        result = manager.delete_conversation("non-existent-id")
-        assert result is False
+        with pytest.raises(ConversationError):
+            manager.delete_conversation("non-existent-id")
   
   def test_get_most_recent_conversation(self):
     """Test getting the most recent conversation."""
@@ -546,8 +546,8 @@ class TestConversationManager:
         assert "Tell me about Python" in messages[3]['content_preview']
         
         # Test with nonexistent conversation
-        empty_list = manager.list_conversation_messages("nonexistent-id")
-        assert empty_list == []
+        with pytest.raises(ConversationError):
+            manager.list_conversation_messages("nonexistent-id")
   
   def test_remove_message_functions(self):
     """Test removing messages and message pairs from conversations."""
@@ -576,9 +576,8 @@ class TestConversationManager:
             with open(conv_path, 'w') as f:
               json.dump(conv.to_dict(), f)
         
-        # Test removing a single message
-        result = manager.remove_message_at_index("test-remove-id", 2)
-        assert result is True
+        # Test removing a single message (should not raise exception)
+        manager.remove_message_at_index("test-remove-id", 2)
         
         # Verify message was removed by listing messages
         messages = manager.list_conversation_messages("test-remove-id")
@@ -586,9 +585,8 @@ class TestConversationManager:
         assert messages[2]['role'] == "user"
         assert "Tell me about Python" in messages[2]['content_preview']
         
-        # Test removing a message pair
-        result = manager.remove_message_pair("test-remove-id", 2)
-        assert result is True
+        # Test removing a message pair (should not raise exception)
+        manager.remove_message_pair("test-remove-id", 2)
         
         # Verify pair was removed
         messages = manager.list_conversation_messages("test-remove-id")
@@ -598,12 +596,12 @@ class TestConversationManager:
         assert "Hello" in messages[1]['content_preview']
         
         # Test with invalid indices
-        result = manager.remove_message_at_index("test-remove-id", 99)
-        assert result is False
+        with pytest.raises(ConversationError):
+            manager.remove_message_at_index("test-remove-id", 99)
         
         # Test with nonexistent conversation
-        result = manager.remove_message_pair("nonexistent-id", 0)
-        assert result is False
+        with pytest.raises(ConversationError):
+            manager.remove_message_pair("nonexistent-id", 0)
     
   def test_remove_message_at_index(self):
     """Test removing a message at a specific index."""
@@ -789,7 +787,7 @@ class TestConversationManager:
         assert os.path.exists(export_path)
         
         # Test exporting with non-existent ID
-        with pytest.raises(ValueError, match="No conversation to export"):
+        with pytest.raises(ConversationError):
           manager.export_conversation_to_markdown(conv_id="non-existent-id", output_path=export_path)
         
         # Test exporting without saving to file (just return content)

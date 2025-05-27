@@ -36,7 +36,9 @@ class TestDisplay:
         kwargs = {
             "model": "gpt-4o",
             "temperature": 0.5,
+            "max_tokens": 1000,
             "systemprompt": "You are a test assistant.",
+            "template": "test_template",
             "reference": ["test.txt"],
             "knowledgebase": "test_kb",
             "knowledgebase_query": "test query"
@@ -50,7 +52,8 @@ class TestDisplay:
             query_texts=query_texts,
             config=config,
             model_parameters=model_parameters,
-            print_full_systemprompt=True
+            print_full_systemprompt=True,
+            conversation=None
         )
         
         # Get the captured output

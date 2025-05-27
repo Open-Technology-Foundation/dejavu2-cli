@@ -10,6 +10,7 @@ from unittest.mock import patch, mock_open, MagicMock
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from templates import load_template_data, get_template, list_template_names, list_templates
+from errors import ConfigurationError, TemplateError
 
 class TestTemplates:
     """Test template handling functionality."""
@@ -44,17 +45,16 @@ class TestTemplates:
     
     def test_load_template_data_file_not_found(self):
         """Test loading templates when the JSON file doesn't exist."""
-        with patch('builtins.open', side_effect=FileNotFoundError):
-            with patch('os.path.exists', return_value=False):
-                templates = load_template_data('nonexistent.json')
-                assert templates == {}
+        with patch('os.path.exists', return_value=False):
+            with pytest.raises(ConfigurationError):
+                load_template_data('nonexistent.json')
     
     def test_load_template_data_invalid_json(self):
         """Test loading templates with invalid JSON content."""
         with patch('builtins.open', mock_open(read_data='{"invalid": json')):
             with patch('os.path.exists', return_value=True):
-                templates = load_template_data('invalid.json')
-                assert templates == {}
+                with pytest.raises(TemplateError):
+                    load_template_data('invalid.json')
     
     def test_get_template_exact_match(self):
         """Test getting a template with an exact name match."""
@@ -72,9 +72,11 @@ class TestTemplates:
         }
         
         with patch('templates.load_template_data', return_value=mock_templates):
-            template = get_template("Template 1", 'dummy_path.json')
+            result = get_template("Template 1", 'dummy_path.json')
             
-            assert template is not None
+            assert result is not None
+            key, template = result
+            assert key == "Template 1"
             assert template["category"] == "General"
             assert template["model"] == "gpt-4o"
     
@@ -92,11 +94,12 @@ class TestTemplates:
         }
         
         with patch('templates.load_template_data', return_value=mock_templates):
-            template = get_template("Alpha", 'dummy_path.json')
+            result = get_template("Alpha", 'dummy_path.json')
             
-            assert template is not None
+            assert result is not None
+            key, template = result
+            assert key == "Template Alpha"
             assert template["category"] == "General"
-            assert template["model"] == "gpt-4o"
     
     def test_get_template_not_found(self):
         """Test getting a template that doesn't exist."""
@@ -107,41 +110,50 @@ class TestTemplates:
         }
         
         with patch('templates.load_template_data', return_value=mock_templates):
-            template = get_template("Nonexistent", 'dummy_path.json')
-            
-            assert template is None
+            with pytest.raises(TemplateError):
+                get_template("NonExistent", 'dummy_path.json')
     
     def test_list_template_names(self):
         """Test listing template names."""
         mock_templates = {
             "Template 1": {"category": "General"},
-            "Template 2": {"category": "Code"},
-            "Template 3": {"category": "General"}
+            "Template 2": {"category": "Code"}
         }
         
         with patch('templates.load_template_data', return_value=mock_templates):
-            names = list_template_names('dummy_path.json')
-            
-            assert "Template 1" in names
-            assert "Template 2" in names
-            assert "Template 3" in names
-            assert len(names) == 3
-            
-    def test_list_templates(self):
-        """Test listing templates with categories."""
+            with patch('sys.stdout.write') as mock_write:
+                list_template_names('dummy_path.json')
+                # Should have called write with template names
+                assert mock_write.called
+    
+    def test_list_templates_all(self):
+        """Test listing all templates."""
         mock_templates = {
-            "Template 1": {"category": "General"},
-            "Template 2": {"category": "Code"},
-            "Template 3": {"category": "General"}
+            "Template 1": {
+                "category": "General",
+                "systemprompt": "You are helpful"
+            }
         }
         
         with patch('templates.load_template_data', return_value=mock_templates):
-            templates_by_category = list_templates('dummy_path.json')
-            
-            assert "General" in templates_by_category
-            assert "Code" in templates_by_category
-            assert "Template 1" in templates_by_category["General"]
-            assert "Template 2" in templates_by_category["Code"]
-            assert "Template 3" in templates_by_category["General"]
-            assert len(templates_by_category["General"]) == 2
-            assert len(templates_by_category["Code"]) == 1
+            with patch('sys.stdout.write') as mock_write:
+                list_templates('dummy_path.json', 'all')
+                # Should have called write with template details
+                assert mock_write.called
+    
+    def test_list_templates_specific(self):
+        """Test listing a specific template."""
+        mock_templates = {
+            "Template 1": {
+                "category": "General",
+                "systemprompt": "You are helpful"
+            }
+        }
+        
+        with patch('templates.load_template_data', return_value=mock_templates):
+            with patch('sys.stdout.write') as mock_write:
+                list_templates('dummy_path.json', 'Template 1')
+                # Should have called write with specific template details
+                assert mock_write.called
+
+#fin

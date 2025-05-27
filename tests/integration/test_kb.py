@@ -6,10 +6,10 @@ import pytest
 import subprocess
 from unittest.mock import patch, MagicMock
 
-# Import the knowledge base function from dejavu2_cli.py
+# Import the knowledge base function from context.py
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from dejavu2_cli import get_knowledgebase_string
+from context import get_knowledgebase_string
 
 # Skip if knowledgebase path is not configured or customkb not installed
 kb_available = pytest.mark.skipif(

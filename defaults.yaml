@@ -26,4 +26,17 @@ logging:
 # Vector database path
 vectordbs_path: /var/lib/vectordbs
 
+# Security configuration
+security:
+  subprocess:
+    timeout: 30.0
+    max_arguments: 10
+    allowed_editors: ["nano", "vim", "vi", "emacs", "joe", "mcedit", "micro", "ne", "jed", "gedit"]
+    allowed_kb_commands: ["customkb"]
+  
+  validation:
+    max_query_length: 1000
+    allow_special_chars: true
+    strict_mode: false
+
 #fin

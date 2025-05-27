@@ -14,6 +14,8 @@ from datetime import datetime
 from dataclasses import dataclass, asdict, field
 from typing import Dict, List, Optional, Any, Union, Tuple
 
+from errors import ConfigurationError, ConversationError
+
 # Configure module logger
 logger = logging.getLogger(__name__)
 
@@ -27,12 +29,32 @@ class Message:
   def __post_init__(self):
     if self.timestamp is None:
       self.timestamp = datetime.now()
+    
+    # Ensure content is always a string
+    if not isinstance(self.content, str):
+      if hasattr(self.content, 'text'):
+        self.content = self.content.text
+      elif isinstance(self.content, (list, dict)):
+        self.content = str(self.content)
+      else:
+        self.content = str(self.content)
   
   def to_dict(self) -> Dict[str, Any]:
     """Convert message to a dictionary for serialization."""
+    # Ensure content is always a string for JSON serialization
+    content_str = self.content
+    if not isinstance(self.content, str):
+      # Handle non-string content by converting to string
+      if hasattr(self.content, 'text'):
+        content_str = self.content.text
+      elif isinstance(self.content, (list, dict)):
+        content_str = str(self.content)
+      else:
+        content_str = str(self.content)
+    
     return {
       'role': self.role,
-      'content': self.content,
+      'content': content_str,
       'timestamp': self.timestamp.isoformat()
     }
   
@@ -266,33 +288,57 @@ class ConversationManager:
     logger.debug(f"Created new conversation: {conv_id}")
     return conv
   
-  def load_conversation(self, conv_id: str) -> Optional[Conversation]:
+  def load_conversation(self, conv_id: str) -> Conversation:
     """Load a conversation from storage by ID."""
     conv_path = self.storage_dir / f"{conv_id}.json"
     if not conv_path.exists():
-      logger.warning(f"Conversation not found: {conv_id}")
-      return None
+      error_msg = f"Conversation not found: {conv_id}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
     
     try:
       with open(conv_path, 'r', encoding='utf-8') as f:
         data = json.load(f)
+    except (OSError, IOError) as e:
+      error_msg = f"Error reading conversation file {conv_id}: {str(e)}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
+    except json.JSONDecodeError as e:
+      error_msg = f"Invalid JSON in conversation file {conv_id}: {str(e)}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
+    
+    try:
+      # Sanitize message content to ensure they're strings
+      if 'messages' in data:
+        for msg_data in data['messages']:
+          if 'content' in msg_data and not isinstance(msg_data['content'], str):
+            # Convert non-string content to string
+            if hasattr(msg_data['content'], 'text'):
+              msg_data['content'] = msg_data['content'].text
+            elif isinstance(msg_data['content'], (list, dict)):
+              msg_data['content'] = str(msg_data['content'])
+            else:
+              msg_data['content'] = str(msg_data['content'])
       
       conv = Conversation.from_dict(data)
       self.active_conversation = conv
       logger.debug(f"Loaded conversation: {conv_id}")
       return conv
-    except Exception as e:
-      logger.error(f"Error loading conversation {conv_id}: {str(e)}")
-      return None
+    except (KeyError, ValueError, TypeError) as e:
+      error_msg = f"Invalid conversation data format in {conv_id}: {str(e)}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
   
-  def save_conversation(self, conv: Optional[Conversation] = None) -> bool:
+  def save_conversation(self, conv: Optional[Conversation] = None) -> None:
     """Save a conversation to storage."""
     if conv is None:
       conv = self.active_conversation
     
     if conv is None:
-      logger.warning("No conversation to save")
-      return False
+      error_msg = "No conversation to save"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
     
     try:
       # Serialize and save
@@ -301,10 +347,14 @@ class ConversationManager:
         json.dump(conv.to_dict(), f, indent=2, ensure_ascii=False)
       
       logger.debug(f"Saved conversation: {conv.id}")
-      return True
-    except Exception as e:
-      logger.error(f"Error saving conversation {conv.id}: {str(e)}")
-      return False
+    except (OSError, IOError) as e:
+      error_msg = f"Error writing conversation file {conv.id}: {str(e)}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
+    except (TypeError, ValueError) as e:
+      error_msg = f"Error serializing conversation {conv.id}: {str(e)}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
   
   def list_conversations(self) -> List[Dict[str, Any]]:
     """List all stored conversations with metadata."""
@@ -324,17 +374,19 @@ class ConversationManager:
           'updated_at': data['updated_at']
         }
         conversations.append(summary)
-      except Exception as e:
+      except (OSError, IOError, json.JSONDecodeError, KeyError) as e:
         logger.warning(f"Error loading conversation from {file_path}: {str(e)}")
+        continue
     
     return conversations
   
-  def delete_conversation(self, conv_id: str) -> bool:
+  def delete_conversation(self, conv_id: str) -> None:
     """Delete a conversation by ID."""
     conv_path = self.storage_dir / f"{conv_id}.json"
     if not conv_path.exists():
-      logger.warning(f"Conversation not found for deletion: {conv_id}")
-      return False
+      error_msg = f"Conversation not found for deletion: {conv_id}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
     
     try:
       conv_path.unlink()
@@ -343,10 +395,10 @@ class ConversationManager:
         self.active_conversation = None
       
       logger.debug(f"Deleted conversation: {conv_id}")
-      return True
-    except Exception as e:
-      logger.error(f"Error deleting conversation {conv_id}: {str(e)}")
-      return False
+    except (OSError, IOError) as e:
+      error_msg = f"Error deleting conversation {conv_id}: {str(e)}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
   
   def get_most_recent_conversation(self) -> Optional[Conversation]:
     """Get the most recently modified conversation."""
@@ -377,7 +429,9 @@ class ConversationManager:
       conversation = self.active_conversation
     
     if not conversation:
-      raise ValueError("No conversation to export")
+      error_msg = "No conversation to export"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
     
     # Generate markdown content
     md_content = conversation.to_markdown()
@@ -388,80 +442,67 @@ class ConversationManager:
         with open(output_path, 'w', encoding='utf-8') as f:
           f.write(md_content)
         return output_path
-      except Exception as e:
-        raise IOError(f"Failed to write markdown file: {str(e)}")
+      except (OSError, IOError) as e:
+        error_msg = f"Failed to write markdown file: {str(e)}"
+        logger.error(error_msg)
+        raise ConversationError(error_msg)
     
     # Otherwise just return the markdown content
     return md_content
   
-  def remove_message_at_index(self, conv_id: str, index: int) -> bool:
+  def remove_message_at_index(self, conv_id: str, index: int) -> None:
     """
     Remove a message at a specific index in a conversation.
     
     Args:
       conv_id: ID of the conversation
       index: Zero-based index of the message to remove
-      
-    Returns:
-      True if successful, False otherwise
     """
-    # Load the conversation
+    # Load the conversation (may raise ConversationError)
     conv = self.load_conversation(conv_id)
-    if not conv:
-      logger.warning(f"Conversation not found for message removal: '{conv_id}' - Check that the ID is correct and the conversation exists")
-      return False
     
     # Remove the message
-    result = conv.remove_message_at_index(index)
+    if not conv.remove_message_at_index(index):
+      error_msg = f"Failed to remove message at index {index} from conversation '{conv_id}' - Index may be out of range (available range: 0-{len(conv.messages)-1})"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
     
-    # Save changes if successful
-    if result:
-      self.save_conversation(conv)
-      logger.info(f"Removed message at index {index} from conversation {conv_id}")
-    else:
-      logger.warning(f"Failed to remove message at index {index} from conversation '{conv_id}' - Index may be out of range (available range: 0-{len(conv.messages)-1})")
-    
-    return result
+    # Save changes
+    self.save_conversation(conv)
+    logger.info(f"Removed message at index {index} from conversation {conv_id}")
   
-  def remove_message_pair(self, conv_id: str, user_index: int) -> bool:
+  def remove_message_pair(self, conv_id: str, user_index: int) -> None:
     """
     Remove a user-assistant message pair from a conversation.
     
     Args:
       conv_id: ID of the conversation
       user_index: Index of the user message to remove (assistant message will also be removed)
-      
-    Returns:
-      True if successful, False otherwise
     """
-    # Load the conversation
+    # Load the conversation (may raise ConversationError)
     conv = self.load_conversation(conv_id)
-    if not conv:
-      logger.warning(f"Conversation not found for message pair removal: '{conv_id}' - Check that the ID is correct and the conversation exists")
-      return False
     
     # Remove the message pair
-    result = conv.remove_message_pair(user_index)
-    
-    # Save changes if successful
-    if result:
-      self.save_conversation(conv)
-      logger.info(f"Removed message pair starting at index {user_index} from conversation {conv_id}")
-    else:
+    if not conv.remove_message_pair(user_index):
       # Provide a helpful error message explaining why it might have failed
       message_count = len(conv.messages)
       if user_index >= message_count:
-        logger.warning(f"Failed to remove message pair: Index {user_index} is out of range (conversation has {message_count} messages)")
+        error_msg = f"Failed to remove message pair: Index {user_index} is out of range (conversation has {message_count} messages)"
       elif user_index == message_count - 1:
-        logger.warning(f"Failed to remove message pair: Index {user_index} is the last message and doesn't have a following message to form a pair")
+        error_msg = f"Failed to remove message pair: Index {user_index} is the last message and doesn't have a following message to form a pair"
       elif not conv.messages[user_index].role == "user":
-        logger.warning(f"Failed to remove message pair: Message at index {user_index} is not a user message (it's a {conv.messages[user_index].role} message)")
+        error_msg = f"Failed to remove message pair: Message at index {user_index} is not a user message (it's a {conv.messages[user_index].role} message)"
       elif not conv.messages[user_index + 1].role == "assistant":
-        logger.warning(f"Failed to remove message pair: Message at index {user_index + 1} is not an assistant message (it's a {conv.messages[user_index + 1].role} message)")
+        error_msg = f"Failed to remove message pair: Message at index {user_index + 1} is not an assistant message (it's a {conv.messages[user_index + 1].role} message)"
       else:
-        logger.warning(f"Failed to remove message pair at index {user_index} from conversation {conv_id} for unknown reason")
+        error_msg = f"Failed to remove message pair at index {user_index} from conversation {conv_id} for unknown reason"
+      
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
     
-    return result
+    # Save changes
+    self.save_conversation(conv)
+    logger.info(f"Removed message pair starting at index {user_index} from conversation {conv_id}")
     
   def list_conversation_messages(self, conv_id: str) -> List[Dict[str, Union[int, str, bool]]]:
     """
@@ -490,11 +531,8 @@ class ConversationManager:
          'timestamp': '2025-03-01 12:01:00', 'is_system': False}
       ]
     """
-    # Load the conversation
+    # Load the conversation (may raise ConversationError)
     conv = self.load_conversation(conv_id)
-    if not conv:
-      logger.warning(f"Conversation not found for listing messages: {conv_id}")
-      return []
     
     # Create list of messages with indices
     result = []

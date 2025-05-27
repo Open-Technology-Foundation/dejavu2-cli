@@ -12,6 +12,9 @@ import click
 import logging
 from typing import Dict, List, Any, Optional, Tuple
 
+# Import custom exceptions
+from errors import ConfigurationError, ModelError
+
 # Configure module logger
 logger = logging.getLogger(__name__)
 
@@ -26,8 +29,7 @@ def list_available_canonical_models(json_file: str) -> List[str]:
         List of available model names sorted alphabetically
         
     Raises:
-        FileNotFoundError: Handled internally, returns empty list
-        JSONDecodeError: Handled internally, returns empty list
+        ConfigurationError: If the models file cannot be found or parsed
     """
     logger.debug(f"Loading models from: {json_file}")
     
@@ -36,20 +38,17 @@ def list_available_canonical_models(json_file: str) -> List[str]:
             models = json.load(file)
             logger.debug(f"Successfully loaded {len(models)} models from file")
     except FileNotFoundError:
-        error_msg = f"The file '{json_file}' was not found"
+        error_msg = f"Models file not found: {json_file}"
         logger.error(error_msg)
-        click.echo(f"Error: {error_msg}", err=True)
-        return []
+        raise ConfigurationError(error_msg)
     except json.JSONDecodeError as e:
-        error_msg = f"The file '{json_file}' contains invalid JSON: {str(e)}"
+        error_msg = f"Invalid JSON in models file '{json_file}': {str(e)}"
         logger.error(error_msg)
-        click.echo(f"Error: {error_msg}", err=True)
-        return []
+        raise ConfigurationError(error_msg)
     except Exception as e:
-        error_msg = f"Error loading models file: {str(e)}"
+        error_msg = f"Error loading models file '{json_file}': {str(e)}"
         logger.error(error_msg)
-        click.echo(f"Error: {error_msg}", err=True)
-        return []
+        raise ConfigurationError(error_msg)
         
     # Extract canonical model names where 'available' is not 0
     canonical_names = [
@@ -74,18 +73,19 @@ def list_available_canonical_models_with_details(json_file: str) -> Dict[str, An
         Dictionary mapping model names to their complete details for available models
         
     Raises:
-        FileNotFoundError: Handled internally, returns empty dict
-        JSONDecodeError: Handled internally, returns empty dict
+        ConfigurationError: If the models file cannot be found or parsed
     """
     try:
         with open(json_file, 'r', encoding='utf-8') as file:
             models = json.load(file)
     except FileNotFoundError:
-        click.echo(f"Error: The file '{json_file}' was not found.", err=True)
-        return {}
-    except json.JSONDecodeError:
-        click.echo(f"Error: The file '{json_file}' contains invalid JSON.", err=True)
-        return {}
+        error_msg = f"Models file not found: {json_file}"
+        logger.error(error_msg)
+        raise ConfigurationError(error_msg)
+    except json.JSONDecodeError as e:
+        error_msg = f"Invalid JSON in models file '{json_file}': {str(e)}"
+        logger.error(error_msg)
+        raise ConfigurationError(error_msg)
         
     # Extract models where 'available' is greater than 0
     available_models = {
@@ -94,7 +94,7 @@ def list_available_canonical_models_with_details(json_file: str) -> Dict[str, An
     }
     return available_models
 
-def get_canonical_model(model_name: str, json_file: str) -> tuple[Optional[str], Dict[str, Any]]:
+def get_canonical_model(model_name: str, json_file: str) -> tuple[str, Dict[str, Any]]:
     """
     Get canonical model name and load model parameters.
     
@@ -106,11 +106,11 @@ def get_canonical_model(model_name: str, json_file: str) -> tuple[Optional[str],
         json_file: Path to the Models.json file
         
     Returns:
-        Tuple of (canonical_model_name, model_parameters) if found,
-        or (None, {}) if not found
+        Tuple of (canonical_model_name, model_parameters)
         
     Raises:
-        SystemExit: If Models.json cannot be found or contains invalid JSON
+        ConfigurationError: If Models.json cannot be found or contains invalid JSON
+        ModelError: If the requested model is not found
     """
     logger.debug(f"Looking up model: '{model_name}' in {json_file}")
     model_parameters = {}
@@ -120,15 +120,13 @@ def get_canonical_model(model_name: str, json_file: str) -> tuple[Optional[str],
             models = json.load(file)
             logger.debug(f"Successfully loaded {len(models)} models from {json_file}")
     except FileNotFoundError:
-        error_msg = f"The file '{json_file}' was not found"
+        error_msg = f"Models file not found: {json_file}"
         logger.error(error_msg)
-        click.echo(f"Error: {error_msg}", err=True)
-        sys.exit(1)
+        raise ConfigurationError(error_msg)
     except json.JSONDecodeError as e:
-        error_msg = f"The file '{json_file}' contains invalid JSON: {str(e)}"
+        error_msg = f"Invalid JSON in models file '{json_file}': {str(e)}"
         logger.error(error_msg)
-        click.echo(f"Error: {error_msg}", err=True)
-        sys.exit(1)
+        raise ConfigurationError(error_msg)
 
     # Check if the model name is a canonical name
     canonical_name = None
@@ -159,8 +157,9 @@ def get_canonical_model(model_name: str, json_file: str) -> tuple[Optional[str],
 
     if not canonical_name:
         # Model name not found
-        logger.warning(f"No matching model found for '{model_name}'")
-        return None, {}
+        error_msg = f"Model '{model_name}' not found in models file"
+        logger.warning(error_msg)
+        raise ModelError(error_msg)
 
     # Initialize model_parameters from Models.json - include all model information
     model_info = models.get(canonical_name, {})

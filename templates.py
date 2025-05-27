@@ -9,7 +9,13 @@ import os
 import sys
 import json
 import click
+import logging
 from typing import Dict, Any, Optional, Tuple, List
+
+from errors import ConfigurationError, TemplateError
+
+# Configure module logger
+logger = logging.getLogger(__name__)
 
 def normalize_key(key: str) -> str:
     """
@@ -42,25 +48,34 @@ def load_template_data(template_path: str) -> Dict[str, Dict[str, Any]]:
         Dictionary containing template definitions, with template names as keys
         
     Raises:
-        FileNotFoundError: If the templates file cannot be found
-        json.JSONDecodeError: If the file contains invalid JSON
+        ConfigurationError: If the templates file cannot be found or accessed
+        TemplateError: If the file contains invalid JSON or format
     """
     if not os.path.exists(template_path):
-        click.echo(f"Error: Template file not found: {template_path}", err=True)
-        raise FileNotFoundError(f"Template file not found: {template_path}")
+        error_msg = f"Template file not found: {template_path}"
+        logger.error(error_msg)
+        raise ConfigurationError(error_msg)
         
     try:
         with open(template_path, 'r', encoding='utf-8') as file:
             templates = json.load(file)
-            if not isinstance(templates, dict):
-                click.echo(f"Error: Invalid template format. Expected JSON object.", err=True)
-                raise ValueError("Invalid template format. Expected JSON object.")
-            return templates
+    except (OSError, IOError) as e:
+        error_msg = f"Error reading template file {template_path}: {str(e)}"
+        logger.error(error_msg)
+        raise ConfigurationError(error_msg)
     except json.JSONDecodeError as e:
-        click.echo(f"Error parsing template JSON file: {e}", err=True)
-        raise
+        error_msg = f"Invalid JSON in template file {template_path}: {str(e)}"
+        logger.error(error_msg)
+        raise TemplateError(error_msg)
+    
+    if not isinstance(templates, dict):
+        error_msg = f"Invalid template format in {template_path}. Expected JSON object, got {type(templates).__name__}"
+        logger.error(error_msg)
+        raise TemplateError(error_msg)
+        
+    return templates
 
-def get_template(template_key: str, template_path: str) -> Optional[Tuple[str, Dict[str, Any]]]:
+def get_template(template_key: str, template_path: str) -> Tuple[str, Dict[str, Any]]:
     """
     Retrieve a template by its key, using fuzzy matching for the lookup.
     
@@ -72,21 +87,18 @@ def get_template(template_key: str, template_path: str) -> Optional[Tuple[str, D
         template_path: Path to the templates file
         
     Returns:
-        Tuple of (original_key, template_data) if found, None otherwise
+        Tuple of (original_key, template_data) if found
         
     Raises:
-        FileNotFoundError: If the templates file cannot be found
-        json.JSONDecodeError: If the templates file contains invalid JSON
-        ValueError: If the templates file has an invalid format
+        ConfigurationError: If the templates file cannot be found or accessed
+        TemplateError: If the template key is invalid or template not found
     """
     if not template_key or not template_key.strip():
-        return None
+        error_msg = "Template key cannot be empty or whitespace"
+        logger.error(error_msg)
+        raise TemplateError(error_msg)
         
-    try:
-        templates = load_template_data(template_path)
-    except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-        click.echo(f"Error loading templates: {str(e)}", err=True)
-        raise
+    templates = load_template_data(template_path)
     
     # Search in order of decreasing specificity:
     
@@ -104,8 +116,12 @@ def get_template(template_key: str, template_path: str) -> Optional[Tuple[str, D
     for key, value in templates.items():
         if normalized_search in normalize_key(key):
             return key, value
-        
-    return None
+    
+    # Template not found
+    available_templates = list(templates.keys())
+    error_msg = f"Template '{template_key}' not found. Available templates: {', '.join(available_templates)}"
+    logger.error(error_msg)
+    raise TemplateError(error_msg)
 
 def print_template(name: str, data: Dict[str, Any]) -> None:
     """
@@ -137,15 +153,10 @@ def list_template_names(template_path: str) -> List[str]:
         List of template names sorted alphabetically
         
     Raises:
-        FileNotFoundError: If the templates file cannot be found
-        json.JSONDecodeError: If the templates file contains invalid JSON
-        ValueError: If the templates file has an invalid format
+        ConfigurationError: If the templates file cannot be found or accessed
+        TemplateError: If the templates file contains invalid JSON or format
     """
-    try:
-        data = load_template_data(template_path)
-    except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-        click.echo(f"Error loading templates: {str(e)}", err=True)
-        raise
+    data = load_template_data(template_path)
         
     sorted_names = sorted(data.keys(), key=str.casefold)
     
@@ -196,15 +207,10 @@ def list_templates(template_path: str, template: Optional[str] = None, names_onl
         Dictionary of templates organized by category
         
     Raises:
-        FileNotFoundError: If the templates file cannot be found
-        json.JSONDecodeError: If the templates file contains invalid JSON
-        ValueError: If the templates file has an invalid format
+        ConfigurationError: If the templates file cannot be found or accessed
+        TemplateError: If the templates file contains invalid JSON or format
     """
-    try:
-        data = load_template_data(template_path)
-    except (FileNotFoundError, json.JSONDecodeError, ValueError) as e:
-        click.echo(f"Error loading templates: {str(e)}", err=True)
-        raise
+    data = load_template_data(template_path)
 
     # If only names requested, use the list_template_names function
     if names_only:
@@ -229,7 +235,10 @@ def list_templates(template_path: str, template: Optional[str] = None, names_onl
                     break
         
         if not template_found:
-            click.echo(f"Error: Template '{template}' not found.", err=True)
+            available_templates = list(data.keys())
+            error_msg = f"Template '{template}' not found. Available templates: {', '.join(available_templates)}"
+            logger.error(error_msg)
+            raise TemplateError(error_msg)
         
         return {}
     
