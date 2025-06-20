@@ -504,7 +504,6 @@ def update_models_json(cached_data, dry_run=False):
             "family": family,
             "series": series,
             "description": description,
-            "training_data": cutoff_date,
             "data_cutoff_date": cutoff_date,
             "url": "https://api.openai.com/v1",
             "apikey": "OPENAI_API_KEY",
