@@ -311,7 +311,7 @@ def get_knowledgebase_subprocess() -> SecureSubprocess:
   config = SubprocessConfig(
     allowed_commands=['customkb'],
     max_args=6,
-    timeout=30.0,
+    timeout=300.0,
     environment_whitelist=['ANTHROPIC_API_KEY', 'OPENAI_API_KEY', 'GOOGLE_API_KEY']
   )
   return SecureSubprocess(config)

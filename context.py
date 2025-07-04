@@ -168,7 +168,7 @@ def get_knowledgebase_string(
         
         # Execute with security validation
         result = secure_subprocess.run(
-            [safe_executable, 'query', safe_knowledgebase, safe_query, '--context']
+            [safe_executable, 'query', safe_knowledgebase, safe_query, '--context', '--quiet']
         )
         
         # Escape the output for XML safety

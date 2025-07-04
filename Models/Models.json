@@ -2,14 +2,14 @@
   "chatgpt-4o-latest": {
     "model": "chatgpt-4o-latest",
     "alias": "chatgpt4o",
-    "parent": "OpenAI",
+    "parent": null,
     "model_category": "LLM",
     "family": "openai",
     "series": "chatgpt",
     "description": "Latest ChatGPT-4o model with multimodal capabilities and improved performance",
     "data_cutoff_date": "2023-10",
-    "url": "https://api.openai.com/v1",
-    "apikey": "OPENAI_API_KEY",
+    "url": null,
+    "apikey": null,
     "context_window": 128000,
     "max_output_tokens": 16384,
     "token_costs": "$2.50/$10.00 per 1M tokens",
@@ -29,7 +29,7 @@
     "url": "https://api.anthropic.com/v1",
     "apikey": "ANTHROPIC_API_KEY",
     "context_window": 200000,
-    "max_output_tokens": 4000,
+    "max_output_tokens": 4001,
     "token_costs": "$1.00/$5.00",
     "vision": 1,
     "available": 1,
@@ -58,29 +58,6 @@
     "available": 9,
     "enabled": 1
   },
-  "claude-3-7-sonnet-latest": {
-    "model": "claude-3-7-sonnet-latest",
-    "alias": "sonnet",
-    "parent": "Anthropic",
-    "model_category": "LLM",
-    "family": "anthropic",
-    "model_family": "anthropic",
-    "model_type": "claude",
-    "series": "claude3",
-    "description": "Highest level of intelligence and capability with toggleable extended thinking",
-    "data_cutoff_date": "2024-10",
-    "url": "https://api.anthropic.com/v1",
-    "model_url": "https://api.anthropic.com/v1",
-    "apikey": "ANTHROPIC_API_KEY",
-    "model_apikey": "ANTHROPIC_API_KEY",
-    "context_window": 200000,
-    "model_context": 200000,
-    "max_output_tokens": 128000,
-    "token_costs": "$3.00/$15.00",
-    "vision": 1,
-    "available": 5,
-    "enabled": 1
-  },
   "claude-3-haiku-latest": {
     "model": "claude-3-haiku-latest",
     "alias": "haiku3",
@@ -96,8 +73,8 @@
     "max_output_tokens": 4096,
     "token_costs": "$0.25/$1.25",
     "vision": 1,
-    "available": 5,
-    "enabled": 0
+    "available": 9,
+    "enabled": 1
   },
   "claude-opus-4-0": {
     "model": "claude-opus-4-0",
@@ -123,7 +100,7 @@
     "enabled": 1
   },
   "claude-opus-4-latest": {
-    "model": "claude-opus-4-0",
+    "model": "claude-opus-4-latest",
     "alias": "opus4latest",
     "parent": "Anthropic",
     "model_category": "LLM",
@@ -147,7 +124,7 @@
   },
   "claude-sonnet-4-0": {
     "model": "claude-sonnet-4-0",
-    "alias": "sonnet4",
+    "alias": "sonnet",
     "parent": "Anthropic",
     "model_category": "LLM",
     "family": "anthropic",
@@ -169,7 +146,7 @@
     "enabled": 1
   },
   "claude-sonnet-4-latest": {
-    "model": "claude-sonnet-4-0",
+    "model": "claude-sonnet-4-latest",
     "alias": "sonnet4latest",
     "parent": "Anthropic",
     "model_category": "LLM",
@@ -287,7 +264,7 @@
     "model_category": "LLM",
     "family": "ollama",
     "series": "gemma",
-    "description": "",
+    "description": null,
     "data_cutoff_date": "2024-08",
     "url": "https://ai.okusi.id/api",
     "apikey": "llama",
@@ -295,7 +272,7 @@
     "max_output_tokens": 8000,
     "token_costs": "0",
     "vision": 0,
-    "available": 1,
+    "available": 7,
     "enabled": 1,
     "url2": "http://localhost:11434/api"
   },
@@ -332,7 +309,7 @@
     "max_output_tokens": 4000,
     "token_costs": "0",
     "vision": 1,
-    "available": 1,
+    "available": 6,
     "enabled": 1,
     "url2": "http://localhost:11434/api"
   },
@@ -351,7 +328,7 @@
     "max_output_tokens": 32768,
     "token_costs": "$2.00/$8.00 per 1M tokens",
     "vision": 1,
-    "available": 1,
+    "available": 5,
     "enabled": 1
   },
   "gpt-4.1-mini": {
@@ -423,7 +400,7 @@
     "max_output_tokens": 16384,
     "token_costs": "$2.50/$10.00 per 1M tokens",
     "vision": 1,
-    "available": 1,
+    "available": 3,
     "enabled": 1
   },
   "gpt-4o-audio-preview": {
@@ -583,7 +560,7 @@
     "max_output_tokens": 100000,
     "token_costs": "$2.00/$8.00 per 1M tokens",
     "vision": 1,
-    "available": 1,
+    "available": 9,
     "enabled": 1
   },
   "o3-mini": {
@@ -601,7 +578,7 @@
     "max_output_tokens": 100000,
     "token_costs": "$1.10/$4.40 per 1M tokens",
     "vision": 0,
-    "available": 1,
+    "available": 3,
     "enabled": 1
   },
   "o3-pro": {
