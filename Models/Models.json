@@ -56,7 +56,7 @@
     "token_costs": "$3.00/$15.00",
     "vision": 1,
     "available": 9,
-    "enabled": 1
+    "enabled": 0
   },
   "claude-3-haiku-latest": {
     "model": "claude-3-haiku-latest",
@@ -142,7 +142,7 @@
     "max_output_tokens": 64000,
     "token_costs": "$3.00/$15.00",
     "vision": 1,
-    "available": 8,
+    "available": 1,
     "enabled": 1
   },
   "claude-sonnet-4-latest": {
@@ -312,6 +312,42 @@
     "available": 6,
     "enabled": 1,
     "url2": "http://localhost:11434/api"
+  },
+  "grok-4": {
+    "model": "grok-4",
+    "alias": "grok4",
+    "parent": "xAI",
+    "model_category": "LLM",
+    "family": "xai",
+    "series": "grok",
+    "description": "xAI's advanced reasoning model with 130K context window, described as 'PhD-level in everything'",
+    "data_cutoff_date": "2025-07",
+    "url": "https://api.x.ai/v1",
+    "apikey": "XAI_API_KEY",
+    "context_window": 130000,
+    "max_output_tokens": 32768,
+    "token_costs": "$3.00/$15.00 per 1M tokens",
+    "vision": 1,
+    "available": 1,
+    "enabled": 1
+  },
+  "grok-4-heavy": {
+    "model": "grok-4-heavy",
+    "alias": "grok4heavy",
+    "parent": "xAI",
+    "model_category": "LLM",
+    "family": "xai",
+    "series": "grok",
+    "description": "xAI's multi-agent reasoning model that spawns multiple agents in parallel for superior performance",
+    "data_cutoff_date": "2025-07",
+    "url": "https://api.x.ai/v1",
+    "apikey": "XAI_API_KEY",
+    "context_window": 130000,
+    "max_output_tokens": 32768,
+    "token_costs": "$3.00/$15.00 per 1M tokens",
+    "vision": 1,
+    "available": 1,
+    "enabled": 1
   },
   "gpt-4.1": {
     "model": "gpt-4.1",
