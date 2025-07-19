@@ -314,7 +314,7 @@
     "url2": "http://localhost:11434/api"
   },
   "grok-4": {
-    "model": "grok-4",
+    "model": "grok-4-0709",
     "alias": "grok4",
     "parent": "xAI",
     "model_category": "LLM",
@@ -346,8 +346,8 @@
     "max_output_tokens": 32768,
     "token_costs": "$3.00/$15.00 per 1M tokens",
     "vision": 1,
-    "available": 1,
-    "enabled": 1
+    "available": 6,
+    "enabled": 0
   },
   "gpt-4.1": {
     "model": "gpt-4.1",
