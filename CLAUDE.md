@@ -9,7 +9,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Test categories: `./run_tests.sh --unit|--integration|--functional`
 - Single test: `python -m pytest tests/path/to/test_file.py::TestClass::test_function -v`
 - With coverage: `./run_tests.sh --coverage`
-- Update models: `python Models/update_anthropic_models.py` or `python Models/update_openai_models.py`
+- Update models: `cd Models && ./dv2-models-update` or `./dv2-update-models`
+- List models: `cd Models && ./dv2-models-list [filters]`
+- Check outdated deps: `pip list --outdated`
+- Update version: `./version_updater.py`
 
 ## Code Standards
 - Python: 2-space indentation, 100 char line limit, shebang `#!/usr/bin/env python3`
@@ -30,6 +33,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `models.py` - Model definitions and selection logic
   - `templates.py` - Template management for parameter presets
   - `context.py` - Reference files and knowledge base handling
+  - `security.py` - Input validation and secure subprocess execution
+  - `errors.py` - Custom exception hierarchy for precise error handling
 - **Configuration**: 
   - `defaults.yaml` - Default settings and paths
   - `Models.json` - Model definitions with aliases and parameters
@@ -38,6 +43,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Testing**: pytest with 3-tier structure (unit/integration/functional), fixtures in conftest.py
 - **Conversation Storage**: JSON files in `~/.config/dejavu2-cli/conversations/`
 
+## Critical Module Interactions
+- **Query Flow**: main.py → llm_clients.py → API → conversations.py (storage)
+- **Security Layer**: All subprocess calls must go through security.py's SecureSubprocess
+- **Model Resolution**: main.py → models.py (alias lookup) → llm_clients.py (API client)
+- **Context Assembly**: main.py → context.py (files/KB) → XML formatting → LLM query
+- **Error Propagation**: Custom exceptions from errors.py bubble up with context
+- **Configuration Hierarchy**: defaults.yaml → user config → CLI args (override order)
+
 ## Development Notes
 - Modular design separates concerns across specialized modules
 - LLM clients handle provider-specific requirements (O1/O3 models need special parameter handling)
@@ -45,6 +58,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - Template system allows parameter presets for consistent usage patterns
 - Knowledge base integration via customKB for context enhancement
 - Robust error handling with meaningful messages and bypass options
+
+## Ollama Integration Details
+- **Local Server**: Default at http://localhost:11434/api/chat
+- **Remote Server**: Supports https://ai.okusi.id/api/chat and custom endpoints
+- **Model Names**: Special handling for colons (e.g., "gemma3:4b")
+- **Response Formats**: Handles both streaming and non-streaming JSON
+- **Metadata Extraction**: Captures total_duration, prompt_eval_count, eval_count
+- **Error Handling**: Graceful fallback for different Ollama response formats
 
 ## Development Guidelines
 
@@ -55,11 +76,21 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Subprocess Security**: External commands use secure subprocess handling
 - **XML Safety**: User input is XML-escaped before inclusion in queries
 
+### Known Security Issues (Priority Fixes)
+- **API Key Exposure**: Currently all API keys passed to subprocesses - filter based on need
+- **Race Conditions**: No file locking on conversation saves - implement fcntl locking
+- **XML Injection Risk**: Validate reference_string and knowledgebase_string before concatenation
+
 ### Performance Optimization
 - **Lazy Loading**: Clients initialized only when needed
 - **Response Caching**: Consider implementing for repeated queries
 - **Memory Management**: Large conversations may require pagination
 - **Concurrent Operations**: Use async patterns for multiple API calls when beneficial
+
+### Performance Limitations
+- **Large Conversations**: Entire history loaded into memory - implement 50 message limit
+- **Synchronous API Calls**: Gemini model list blocks UI - add caching with TTL
+- **File I/O**: Models.json/Agents.json loaded repeatedly - implement module-level caching
 
 ### Error Handling Philosophy
 - **Specific Exceptions**: Use custom exception hierarchy from `errors.py`

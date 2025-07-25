@@ -2,6 +2,9 @@
 
 This directory contains the agent registry and configuration tools for the WAH.ID platform, enabling predefined AI personas with specialized capabilities.
 
+## System Configuration
+- Agents.json is shared by multiple applications, including WAHID (https://wah.id, /var/www/vhosts/WAHID/), customkb (/ai/scripts/customkb/), and others.
+
 ## Agents.json Structure
 
 The `Agents.json` file serves as the central registry for all AI agent definitions available within the WAH.ID platform. It defines various pre-configured agents with specific personalities, roles, and parameter settings optimized for different use cases.

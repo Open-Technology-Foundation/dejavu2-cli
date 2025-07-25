@@ -1,751 +1,618 @@
-# dejavu2-cli 
+# dejavu2-cli
 
 A powerful command-line interface for interacting with various Large Language Models (LLMs) including OpenAI, Anthropic Claude, Google Gemini, and local models via Ollama.
 
+## Table of Contents
+
+- [Overview](#overview)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Architecture](#architecture)
+- [Command-Line Interface](#command-line-interface)
+- [Models Module](#models-module)
+- [Agents Module](#agents-module)
+- [Configuration](#configuration)
+- [Usage Examples](#usage-examples)
+- [Development](#development)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
+
 ## Overview
 
-`dejavu2-cli` (`dv2` for short) is a versatile command-line tool designed for executing one-shot queries to multiple language models, including those from OpenAI, Anthropic, Google, and local models via the Ollama server.
+`dejavu2-cli` (also available as `dv2`) is a versatile command-line tool for executing queries to multiple language models from various providers. It provides a unified interface for AI interactions with support for conversation history, contextual inputs, customizable parameters, and agent templates.
 
-The `dv2` tool allows users to interact with LLMs efficiently by providing a range of customizable options, and supports context inclusion through reference files and `customKB` knowledge bases. The tool seamlessly handles different model APIs, response formats, and maintains conversation history for contextual interactions.
+**Current Version**: 0.8.30
 
 ## Features
 
-- **Multi-Model Support**: Seamlessly switch between different LLMs such as GPT-4, Claude variants, Gemini models, and LLaMA models by specifying the model name or using predefined aliases.
-- **Conversation History**: Maintain context across multiple interactions with saved conversation history, allowing for follow-up questions and continued discussions.
-- **Customizable Parameters**: Fine-tune responses by adjusting parameters like temperature, maximum tokens, and system prompts directly from the command line.
-- **Contextual Inputs**: Enhance queries by including content from reference text files or customKB knowledge bases, allowing for richer and more informed responses.
-- **Template Management**: Utilize user-defined templates in JSON format to initialize query parameters, ensuring consistency and saving time on repetitive tasks.
-- **Configuration Loading**: Automatically load default settings and user-specific configurations from YAML files, with the ability to override them via command-line options.
-- **Listing and Editing Tools**: List available models, templates, customKB knowledge bases, and conversations. Edit configuration and template files directly from the command line.
-- **Status Display**: Preview the current state of all arguments, options, and conversation context before executing a query.
-- **Model-Specific Parameter Handling**: Automatically adjusts parameters for different model types (like OpenAI's O1/O3 models) to ensure compatibility.
-- **Robust API Integration**: Handles various API response formats, particularly for Ollama chat endpoints, with graceful fallback mechanisms for different JSON structures.
-- **Metadata Tracking**: Captures and logs useful metadata from model responses for performance monitoring and debugging.
+### Core Capabilities
+- **Multi-Provider Support**: Seamlessly interact with models from OpenAI, Anthropic, Google, Meta, xAI, and local Ollama instances
+- **Unified Interface**: Single CLI for all LLM providers with consistent parameter handling
+- **Conversation Management**: Maintain context across sessions with persistent conversation history
+- **Agent Templates**: Pre-configured AI personas with specialized capabilities
+- **Context Enhancement**: Include reference files and knowledge bases in queries
+- **Security-First Design**: Built-in input validation and secure subprocess execution
 
-## Table of Contents
-
-- [Installation](#installation)
-- [Usage](#usage)
-- [Command-Line Options](#command-line-options)
-- [Configuration](#configuration)
-- [Templates](#templates)
-- [Examples](#examples)
-- [Development](#development)
-- [Contributing](#contributing)
-- [License](#license)
-- [Authors](#authors)
+### Advanced Features
+- **Model Registry**: Comprehensive database of 100+ models with aliases and metadata
+- **Smart Parameter Handling**: Automatic adjustment for model-specific requirements (e.g., O1/O3 models)
+- **Multiple Output Formats**: Export conversations to markdown, view in various formats
+- **Robust Error Handling**: Graceful degradation with meaningful error messages
+- **Extensible Architecture**: Modular design for easy feature additions
 
 ## Installation
 
 ### Prerequisites
 
-- **Python 3.7** or higher (Python 3.8+ recommended for best compatibility)
-- **pip** package manager
-- **Git** (for cloning the repository)
-- One or more LLM provider API keys (see Environment Variables section below)
+- Python 3.7 or higher (3.8+ recommended)
+- pip package manager
+- Git (for cloning the repository)
+- API keys for desired LLM providers
 
 ### Steps
 
-1. **Clone the Repository**:
-
+1. **Clone the Repository**
    ```bash
    git clone https://github.com/Open-Technology-Foundation/dejavu2-cli.git
    cd dejavu2-cli
    ```
 
-2. **Install Dependencies**:
-
-   Strongly recommended to set up a virtual environment first.
-   
+2. **Install Dependencies**
    ```bash
    pip install -r requirements.txt
    ```
 
-3. **Set Up Environment Variables**:
-
-   Create environment variables for your API keys:
-
+3. **Set Up API Keys**
    ```bash
-   # Required for Anthropic models (claude-*)
+   # For Anthropic models (Claude)
    export ANTHROPIC_API_KEY="your_anthropic_api_key"
    
-   # Required for OpenAI models (gpt-*, o1-*, o3-*, etc.)
+   # For OpenAI models (GPT, O1, O3)
    export OPENAI_API_KEY="your_openai_api_key"
    
-   # Required for Google/Gemini models (gemini-*)
+   # For Google models (Gemini)
    export GOOGLE_API_KEY="your_google_api_key"
    
-   # No key needed for local Ollama models (llama-*)
-   # Ensure Ollama server is running locally
+   # Ollama models work without API key (local server)
    ```
 
-   You can add these to your shell profile (`.bashrc`, `.zshrc`, etc.) for persistence.
-   
-   **Important**: Never store API keys in code or configuration files for security reasons.
-   
-   ### Special Note on Model Handling
-
-   Models in different categories may have specific requirements or behaviors:
-
-   - **OpenAI Models** (gpt-3.5-turbo, gpt-4, etc.): Standard approach with system and user prompts.
-   - **OpenAI O1/O3 Models**: Use a different messaging format and require special parameter handling (`max_completion_tokens` instead of `max_tokens`; no temperature parameter).
-   - **Claude Models**: Similar to OpenAI but with some differences in prompt handling.
-   - **Google/Gemini Models**: Requires Google API key and uses a different client library.
-   - **Local Models via Ollama**: Requires the Ollama server to be running locally on port 11434.
-   - **Remote Ollama Models**: Can connect to remote Ollama instances with special handling for models with colons in their names (like "gemma3:4b").
-
-#### Ollama API Integration
-
-The tool includes robust handling for Ollama API responses, particularly for the chat endpoint:
-
-- Supports both local (http://localhost:11434/api/chat) and remote (https://ai.okusi.id/api/chat) Ollama servers
-- Handles streaming and non-streaming JSON responses with appropriate parsing
-- Processes various response formats from the chat endpoint:
-  ```json
-  {
-    "model": "llama3.2",
-    "message": {
-      "role": "assistant",
-      "content": "Response text..."
-    },
-    "done": true
-  }
-  ```
-- Extracts and logs metadata from completed responses:
-  - `total_duration`: Total processing time in milliseconds
-  - `load_duration`: Time taken to load the model
-  - `prompt_eval_count`: Number of tokens in the prompt
-  - `eval_count`: Number of tokens generated
-- Provides graceful error handling for various Ollama API error responses
-
-4. **Ensure Ollama Server is Running** (Optional):
-
-   - If you plan to use local LLaMA-based models, make sure the [Ollama](https://ollama.ai) server is installed and running.
-
-5. **Run the Script**:
-
+4. **Verify Installation**
    ```bash
-   dejavu2-cli "Your query here"
-   # Or use the shorthand
-   dv2 "Your query here"
+   ./dv2 --version
    ```
 
-## Usage
-
-Run `dv2` with your query and desired options:
+## Quick Start
 
 ```bash
-dv2 "Your query here" [options]
+# Basic query using default model (Claude Sonnet)
+dv2 "Explain quantum computing in simple terms"
+
+# Use a specific model by alias
+dv2 "Write a haiku about coding" -m gpt4o
+
+# Use an agent template for specialized tasks
+dv2 "Debug this Python code: print(1/0)" -T "Leet - Full-Stack Programmer"
+
+# Continue a conversation
+dv2 "What are its practical applications?" -c
+
+# Include reference files
+dv2 "Summarize this document" -r report.pdf,data.csv
 ```
 
-To view all available options:
+## Architecture
 
+### Module Overview
+
+The codebase follows a modular architecture with clear separation of concerns:
+
+```
+Core Modules:
+├── main.py              # CLI entry point and orchestration
+├── llm_clients.py       # LLM provider API integrations
+├── conversations.py     # Conversation history management
+├── models.py           # Model registry and selection
+├── templates.py        # Agent template management
+├── context.py          # Reference files and knowledge bases
+├── config.py           # Configuration loading and management
+├── security.py         # Input validation and secure execution
+├── errors.py           # Custom exception hierarchy
+├── display.py          # Output formatting and status display
+├── utils.py            # Utility functions
+└── version.py          # Version information
+```
+
+### Key Components
+
+#### LLM Clients (`llm_clients.py`)
+Handles API interactions with different providers:
+- **OpenAI**: Standard and O1/O3 model support with parameter adjustments
+- **Anthropic**: Claude models with native API integration
+- **Google**: Gemini models via generativeai library
+- **Ollama**: Local and remote server support with robust response parsing
+
+#### Conversation Management (`conversations.py`)
+Persistent conversation storage with:
+- JSON-based storage in `~/.config/dejavu2-cli/conversations/`
+- Message history with metadata tracking
+- Export capabilities to markdown format
+- Message manipulation (removal, pair deletion)
+
+#### Security Layer (`security.py`)
+Comprehensive security features:
+- Input validation for queries and file paths
+- Secure subprocess execution with whitelisting
+- Command injection prevention
+- Configurable security policies
+
+## Command-Line Interface
+
+### Basic Usage
 ```bash
-dv2 --help
+dv2 [QUERY] [OPTIONS]
 ```
 
-## Command-Line Options
+### Primary Options
 
-### Main Options
+| Option | Description |
+|--------|-------------|
+| `-m, --model MODEL` | Select model by name or alias (e.g., `gpt4o`, `sonnet`) |
+| `-T, --template NAME` | Use an agent template (e.g., `"Coder - Software Expert"`) |
+| `-t, --temperature FLOAT` | Set creativity level (0.0-1.0) |
+| `-M, --max-tokens INT` | Maximum response length |
+| `-s, --systemprompt TEXT` | Custom system instructions |
 
-- `-V, --version`  
-  Show version information and exit.
+### Conversation Management
 
-- `-T, --template TEXT`  
-  Use a template to initialize arguments (defined in `Agents.json`).
+| Option | Description |
+|--------|-------------|
+| `-c, --continue` | Continue the most recent conversation |
+| `-C, --conversation ID` | Continue a specific conversation |
+| `-n, --new-conversation` | Force start a new conversation |
+| `-x, --list-conversations` | List all saved conversations |
+| `-e, --export-conversation ID` | Export conversation to markdown |
+| `-W, --list-messages ID` | Show all messages in a conversation |
+| `--remove-message ID INDEX` | Remove a specific message |
+| `--remove-pair ID INDEX` | Remove a user-assistant message pair |
 
-- `-m, --model TEXT`  
-  Specify the LLM model to use (e.g., "gpt-4o", "claude-3-7-sonnet-latest", "llama3.1"). Aliases like "sonnet" or "gpt4o" can also be used.
+### Context and References
 
-- `-s, --systemprompt TEXT`  
-  Set the system prompt for the AI assistant (e.g., "You are a helpful assistant.").
+| Option | Description |
+|--------|-------------|
+| `-r, --reference FILES` | Include reference files (comma-separated) |
+| `-k, --knowledgebase NAME` | Use a knowledge base for context |
+| `-Q, --knowledgebase-query` | Custom query for knowledge base |
 
-- `-t, --temperature FLOAT`  
-  Set the sampling temperature for the LLM (e.g., `0.7`); higher values make output more random.
+### Information and Configuration
 
-- `-M, --max-tokens INTEGER`  
-  Define the maximum number of tokens for the LLM to generate.
+| Option | Description |
+|--------|-------------|
+| `-S, --status` | Display current configuration |
+| `-a, --list-models` | List available models |
+| `-l, --list-template NAME` | Show template details |
+| `-K, --list-knowledge-bases` | List available knowledge bases |
+| `-E, --edit-templates` | Edit Agents.json |
+| `-D, --edit-defaults` | Edit defaults.yaml |
 
-### Conversation Options
+## Models Module
 
-- `-c, --continue`  
-  Continue the most recent conversation, maintaining context from previous exchanges.
+The Models module maintains a comprehensive registry of AI models across all supported providers.
 
-- `-C, --conversation TEXT`  
-  Load a specific conversation by ID to continue an earlier interaction.
+### Model Registry (`Models.json`)
 
-- `-x, --list-conversations`  
-  List all saved conversations with their IDs, titles, and other metadata.
+Each model entry contains:
+- **Identification**: model ID, alias, provider, family
+- **Capabilities**: context window, max tokens, vision support
+- **Availability**: enabled/available status (0-9 scale)
+- **Metadata**: descriptions, training dates, pricing
 
-- `-X, --delete-conversation TEXT`  
-  Delete a specific conversation by ID.
-
-- `-n, --new-conversation`  
-  Start a new conversation even when continuing would be possible.
-  
-- `-i, --title TEXT`  
-  Set a title for a new conversation (otherwise one will be auto-generated).
-  
-- `-e, --export-conversation TEXT`  
-  Export a conversation to markdown format. Use "current" for the active conversation or specify a conversation ID.
-
-- `-f, --export-path TEXT`  
-  Specify the path to save the exported markdown file (defaults to current directory).
-  
-- `-O, --stdout`  
-  Output the exported conversation directly to stdout instead of saving to a file.
-  
-- `-W, --list-messages CONVERSATION_ID`  
-  List all messages in a conversation with their indices and content previews, useful for identifying specific messages to remove.
-
-- `--remove-message ('CONVERSATION_ID', 'MESSAGE_INDEX')`  
-  Remove a single message from a conversation. Use `--list-messages` first to find the correct indices.
-
-- `--remove-pair ('CONVERSATION_ID', 'USER_MESSAGE_INDEX')`  
-  Remove a user-assistant message pair. The index must point to a user message that is followed by an assistant message.
-
-### Context Options
-
-- `-r, --reference TEXT`  
-  Include content from reference text files as context (comma-separated list of file paths).
-
-- `-k, --knowledgebase TEXT`  
-  Specify a customKB knowledge base to query for additional context.
-
-- `-Q, --knowledgebase-query TEXT`  
-  Define a query to send to the customKB knowledge base (defaults to the main query if not provided).
-
-### Status and Information
-
-- `-S, --status`  
-  Display the current state of all arguments and options.
-
-- `-P, --print-systemprompt`  
-  Print the full system prompt when using `--status`.
-
-### Listing Options
-
-- `-a, --list-models`  
-  List all available LLM models as defined in the `Models.json` file.
-
-- `-A, --list-models-details`  
-  List all available models with detailed information.
-
-- `-l, --list-template TEXT`  
-  List details of all templates or a specific template.
-
-- `-L, --list-template-names`  
-  List the names of all available templates.
-
-- `-K, --list-knowledge-bases`  
-  List all available customKB knowledge bases.
-
-### Editing Options
-
-- `-E, --edit-templates`  
-  Edit the `Agents.json` file using the default editor or 'p'.
-
-- `-D, --edit-defaults`  
-  Edit the `defaults.yaml` configuration file.
-  
-- `-d, --edit-models`  
-  Edit the `Models.json` file.
-
-### Output Options
-
-- `-p, --project-name TEXT`  
-  The project name for recording conversations.
-
-- `-o, --output-dir TEXT`  
-  Directory to output conversation results to.
-
-- `-g, --message <TEXT TEXT>...`  
-  Add message pairs in the form: `-g role "message"` (e.g., `-g user "hello" -g assistant "hi"`).
-
-## Configuration
-
-### Configuration Files
-
-The system uses three main configuration files:
-
-1. **defaults.yaml**: Default settings and paths
-2. **Models.json**: Model definitions and aliases
-3. **Agents.json**: Template definitions
-
-### Conversation Storage
-
-Conversations are stored as JSON files in:
-
-```
-~/.config/dejavu2-cli/conversations/
-```
-
-Each JSON file contains:
-- Conversation metadata (id, title, created/updated timestamps)
-- Model configuration (model, temperature, max_tokens)
-- Complete message history (including system prompts)
-
-This allows for persistent context across sessions and detailed conversation tracking.
-
-### defaults.yaml
-
-Contains default settings, paths, and logging configurations.
-
-```yaml
-# defaults.yaml
-
-# Command line defaults
-defaults:
-  template: Dejavu2 # This template, when specified, will override the values below
-  systemprompt: You are a friendly and helpful AI Assistant.
-  reference: ""
-  model: sonnet
-  temperature: 0.1
-  max_tokens: 4000
-  completions: 1
-  knowledgebase: ""
-
-# Paths
-paths:
-  prgdir: ""  # Will be set programmatically at runtime
-  template_path: Agents.json
-  customkb: /ai/scripts/customkb/customkb
-
-# Logging
-logging:
-  level: DEBUG
-  format: "%(levelname)s: %(message)s"
-
-# Vector database path
-vectordbs_path: /var/lib/vectordbs
-```
-
-### Models.json
-
-Defines available models and their aliases. Each model entry contains:
-
+Example model entry:
 ```json
 "claude-3-7-sonnet-latest": {
   "model": "claude-3-7-sonnet-latest",
   "alias": "sonnet",
   "parent": "Anthropic",
   "model_category": "LLM",
-  "family": "claude3",
-  "series": "claude3",
-  "description": "Highest level of intelligence and capability with toggleable extended thinking",
-  "training_data": "2024-10",
-  "data_cutoff_date": "2024-10",
-  "url": "https://api.anthropic.com/v1",
-  "apikey": "ANTHROPIC_API_KEY",
   "context_window": 200000,
   "max_output_tokens": 128000,
-  "token_costs": "$3.00/$15.00",
   "vision": 1,
   "available": 9,
   "enabled": 1
 }
 ```
 
-The `alias` field allows you to use shorthand names like "sonnet" instead of the full model name.
+### Model Management Tools
 
-### Agents.json
-
-Defines templates for initializing query parameters.
-
-```json
-{
-  "DéjàVu2 - Helpful AI": {
-    "category": "General",
-    "knowledgebase": "",
-    "max_tokens": 4000,
-    "model": "claude-3-5-sonnet-latest", 
-    "monospace": false,
-    "systemprompt": "Your name is DéjàVu2. You are a friendly and helpful general AI assistant.",
-    "temperature": 0.35
-  }
-}
-
-```
-
-## Templates
-
-Templates allow you to predefine sets of parameters for common tasks. This is especially useful if you frequently use the same settings.
-
-### Example Template Definition
-
-```json
-{
-  "Summariser - Summary Machine": {
-    "category": "Edit-Summarize",
-    "knowledgebase": "",
-    "max_tokens": 8000,
-    "model": "claude-3-5-sonnet-latest",
-    "monospace": false,
-    "systemprompt": "You are a summarization machine. Summarize the key points of the user's text in a concise and insightful manner.",
-    "temperature": 0.3
-  }
-}
-```
-
-### Using a Template
-
+#### List Models (`dv2-models-list`)
+Advanced querying and filtering:
 ```bash
-dv2 "Explain quantum computing in simple terms." -T "DéjàVu2 - Helpful AI"
+# List all enabled models
+./Models/dv2-models-list
+
+# Filter by provider
+./Models/dv2-models-list -F "parent:equals:OpenAI"
+
+# Complex queries
+./Models/dv2-models-list -F "context_window:>:100000" -F "vision:equals:1"
+
+# Export formats
+./Models/dv2-models-list -o json
+./Models/dv2-models-list -o table -col model,alias,context_window
 ```
 
-## Examples
-
-### Basic Query
-
+#### Update Models (`dv2-models-update`)
+Claude-powered intelligent updates:
 ```bash
+# Update all providers
+./Models/dv2-models-update --all
+
+# Update specific provider
+./Models/dv2-models-update --provider anthropic
+
+# Dry run mode
+./Models/dv2-models-update --all --dry-run
+```
+
+### Model Selection
+Models can be selected by:
+1. **Full model ID**: `claude-3-7-sonnet-latest`
+2. **Alias**: `sonnet`
+3. **Partial match**: `gpt4` (matches `gpt-4o`)
+
+## Agents Module
+
+The Agents module provides pre-configured AI personas with specialized capabilities.
+
+### Agent Registry (`Agents.json`)
+
+Agents are organized by category:
+- **General**: Multi-purpose assistants
+- **Specialist**: Domain experts (coding, legal, medical, etc.)
+- **Edit-Summarize**: Content processing specialists
+
+### Agent Configuration
+
+Each agent defines:
+```json
+"Leet - Full-Stack Programmer": {
+  "category": "Specialist",
+  "systemprompt": "You are Leet, an expert full-stack programmer...",
+  "model": "claude-3-7-sonnet-latest",
+  "max_tokens": 8000,
+  "temperature": 0.35,
+  "monospace": true,
+  "available": 9,
+  "enabled": 9
+}
+```
+
+### Agent Management
+
+#### Command-Line Tool (`dv2-agents`)
+```bash
+# List all agents
+./Agents/dv2-agents list
+
+# View specific agent
+./Agents/dv2-agents list "Leet"
+
+# List by category
+./Agents/dv2-agents list -c Specialist
+
+# Create new agent
+./Agents/dv2-agents insert "NewAgent - Description" \
+  --model claude-3-7-sonnet-latest --temperature 0.7
+
+# Edit existing agent
+./Agents/dv2-agents edit "Leet"
+```
+
+### Using Agents
+
+Agents are selected via the `-T` option:
+```bash
+# Use the Leet programmer for code review
+dv2 "Review this Python function for security issues" -T "Leet" -r code.py
+
+# Use the Legal specialist
+dv2 "Explain this contract clause" -T "Legal - Law and Regulations"
+
+# Use the Editor for improving text
+dv2 "Improve this paragraph" -T "Editor - Text Improvement"
+```
+
+## Configuration
+
+### Configuration Files
+
+1. **defaults.yaml** - System defaults
+   ```yaml
+   defaults:
+     template: Dejavu2
+     model: sonnet
+     temperature: 0.1
+     max_tokens: 4000
+   
+   security:
+     subprocess:
+       timeout: 30.0
+       allowed_editors: ["nano", "vim", "vi", "emacs", "joe"]
+   ```
+
+2. **User Configuration** - `~/.config/dejavu2-cli/config.yaml`
+   - Overrides system defaults
+   - User-specific settings
+
+3. **Models.json** - Model registry
+   - Comprehensive model database
+   - Provider configurations
+
+4. **Agents.json** - Agent templates
+   - Pre-configured AI personas
+   - Specialized system prompts
+
+### Configuration Hierarchy
+1. Command-line arguments (highest priority)
+2. Agent template settings
+3. User configuration
+4. System defaults (lowest priority)
+
+## Usage Examples
+
+### Basic Interactions
+```bash
+# Simple question
 dv2 "What is the capital of France?"
+
+# Creative writing with high temperature
+dv2 "Write a short story about AI" -t 0.9
+
+# Technical analysis with low temperature
+dv2 "Explain TCP/IP networking" -m opus -t 0.1
 ```
 
-### Using a Template
+### Working with Files
+```bash
+# Analyze code
+dv2 "Review this code for bugs" -r main.py,utils.py
+
+# Summarize documents
+dv2 "Summarize these reports" -r report1.pdf,report2.docx -T "Summary"
+
+# Compare files
+dv2 "What are the differences between these configs?" -r old.yaml,new.yaml
+```
+
+### Conversation Management
+```bash
+# Start a titled conversation
+dv2 "Let's discuss machine learning" --title "ML Discussion"
+
+# Continue conversation
+dv2 "What about neural networks?" -c
+
+# Export conversation
+dv2 -e current -f ml_discussion.md
+
+# Review conversation history
+dv2 -x
+dv2 -W 550e8400-e29b-41d4-a716-446655440000
+```
+
+### Using Agent Templates
+```bash
+# Use the Dejavu2 general assistant
+dv2 "Help me understand this concept" -T Dejavu2
+
+# Use specialized agents for domain tasks
+dv2 "Get business advice for Indonesia" -T askOkusi
+dv2 "Find bugs in this code" -T Leet -r app.js
+dv2 "Diagnose these symptoms" -T DiffDiagnosis
+
+# Content processing agents
+dv2 "Improve this text" -T SubEditor -r draft.txt
+dv2 "Summarize this report" -T Summariser -r report.pdf
+dv2 "Convert to markdown" -T Text2md -r document.txt
+
+# Creative and specialized agents
+dv2 "Create a short video idea" -T Vazz
+dv2 "Interview me about my life" -T Bio
+dv2 "Write a children's story" -T CharlesDodgson
+dv2 "Create a Twitter post" -T X_Post
+
+# Other useful agents
+dv2 "Get factual answers" -T Virgo
+dv2 "Translate this text" -T TRANS -r document.txt
+dv2 "Ask with humor" -T Sarki
+
+# Combine agents with specific parameters
+dv2 "Debug this Python code" -T Leet -m opus -t 0.2 -r buggy_code.py
+```
+
+### Knowledge Base Integration
+
+The `customkb` integration allows you to query vector databases for enhanced context:
 
 ```bash
-dv2 "Provide a summary of the latest news." -T "Summariser - Summary Machine"
+# Basic knowledge base query
+dv2 "What is our coding standard?" -k "engineering_docs"
+
+# Specify custom query for the knowledge base
+dv2 "Explain the deployment process" -k "devops_kb" -Q "kubernetes deployment procedures"
+
+# Combine knowledge base with agent templates
+dv2 "Review this code against our standards" -T "Leet" -k "coding_standards" -r new_feature.py
+
+# Multiple context sources
+dv2 "Is this compliant with our policies?" -k "company_policies" -r proposal.pdf
 ```
 
-### Specifying a Model and Adjusting Temperature
+**Available Knowledge Bases**:
+- List all available knowledge bases: `dv2 -K`
+- Knowledge bases are stored in `/var/lib/vectordbs/`
+- Each KB has a configuration file defining its content and indexing
 
+### Advanced Usage
 ```bash
-dv2 "Generate a creative story about a flying car." -m gpt4o -t 0.9
-```
+# Chain commands with context
+dv2 "Analyze this data" -r data.csv | dv2 "Create a summary report" -c
 
-### Including Reference Files
+# Complex multi-context query
+dv2 "Review architecture" -T "DevOps" -k "best_practices" -r architecture.md -m opus
 
-```bash
-dv2 "Analyze the following code." -r "script.py,helpers.py"
-```
-
-### Using Conversation History
-
-Conversations keep track of your interactions with the model, including system prompts, queries, responses, and configuration details. Each conversation automatically stores metadata about the model, temperature, and other settings.
-
-#### Starting Conversations
-
-Start a new conversation:
-```bash
-dv2 "Tell me about quantum computing."
-```
-
-Start a new conversation with a specific title:
-```bash
-dv2 "Let's discuss space exploration." --title "Space Exploration Discussion"
-```
-
-#### Managing Conversations
-
-List all saved conversations to see their IDs, titles, and message counts:
-```bash
-dv2 --list-conversations
-```
-
-Example output:
-```
-=== SAVED CONVERSATIONS ===
-ID: 550e8400-e29b-41d4-a716-446655440000
-Title: Quantum Computing Discussion
-Messages: 4
-Created: 2025-03-01 15:04
-Updated: 2025-03-01 15:14
----
-ID: 663a4911-c38b-42e5-9f23-889735512111
-Title: Space Exploration Discussion
-Messages: 2
-Created: 2025-02-28 10:23
-Updated: 2025-02-28 10:25
-```
-
-Examining a conversation with `--status` shows detailed information including metadata:
-```
-=== CONVERSATION ===
-ID: 550e8400-e29b-41d4-a716-446655440000
-Title: Quantum Computing Discussion
-Messages: 4
-Created: 2025-03-01 15:04
-Last Updated: 2025-03-01 15:14
-
-Metadata:
-  model: claude-3-7-sonnet-latest
-  temperature: 0.7
-  max_tokens: 4000
-  template: Dejavu2 - Helpful AI
-
-Preview of last exchanges:
-  User: Tell me about quantum computing
-  Assistant: Quantum computing is a type of computing that...
-  User: How does quantum entanglement work?
-```
-
-View or access a specific conversation by ID:
-```bash
-dv2 --conversation 550e8400-e29b-41d4-a716-446655440000 --status
-```
-
-Delete a conversation when you no longer need it:
-```bash
-dv2 --delete-conversation 550e8400-e29b-41d4-a716-446655440000
-```
-
-View all messages in a conversation with their indices and content previews:
-```bash
-dv2 --list-messages 550e8400-e29b-41d4-a716-446655440000
-```
-
-Example output:
-```
-=== MESSAGES IN CONVERSATION ===
-ID: 550e8400-e29b-41d4-a716-446655440000
-Title: Quantum Computing Discussion
-
-Index: 0 | Role: system | 2025-03-01 15:04:00
-Content: You are Dejavu2, a friendly and helpful general AI assistant...
-
-Index: 1 | Role: user | 2025-03-01 15:04:10
-Content: Tell me about quantum computing
-
-Index: 2 | Role: assistant | 2025-03-01 15:04:15
-Content: Quantum computing is a type of computing that...
-
-Index: 3 | Role: user | 2025-03-01 15:14:22
-Content: How does quantum entanglement work?
-
-Index: 4 | Role: assistant | 2025-03-01 15:14:30
-Content: Quantum entanglement is a phenomenon where two particles...
-```
-
-Remove a specific message from a conversation:
-```bash
-dv2 --remove-message 550e8400-e29b-41d4-a716-446655440000 3
-```
-
-Remove a user-assistant message pair (must specify the user message index):
-```bash
-dv2 --remove-pair 550e8400-e29b-41d4-a716-446655440000 1
-```
-
-#### Continuing Conversations
-
-Continue the most recent conversation:
-```bash
-dv2 "How does quantum entanglement work?" -c
-```
-
-Continue a specific conversation by ID:
-```bash
-dv2 "I have more questions about this topic." --conversation 550e8400-e29b-41d4-a716-446655440000
-```
-
-Start a new conversation even if you have a recent one:
-```bash
-dv2 "Let's talk about something different." --new-conversation
-```
-
-#### Changing Parameters Mid-Conversation
-
-You can change models or parameters while continuing a conversation:
-```bash
-# Continue with a different model
-dv2 "Can you explain this more creatively?" -c -m "gpt4o" -t 0.7
-```
-
-The conversation metadata will automatically update to track these changes.
-
-#### Exporting Conversations
-
-Export a conversation to markdown format for sharing or archiving:
-```bash
-# Export the most recent conversation to a file
-dv2 -e current
-
-# Export a specific conversation by ID
-dv2 -e 550e8400-e29b-41d4-a716-446655440000
-
-# Export to a specific path/filename
-dv2 -e current -f "~/Documents/quantum_discussion.md"
-
-# Output directly to stdout (for piping or viewing)
-dv2 -e current -O
-
-# Output to stdout and pipe to less for paging
-dv2 -e current -O | less
-
-# Output to stdout and pipe to grep to search for specific content
-dv2 -e current -O | grep "quantum"
-```
-
-The markdown export includes:
-- Conversation metadata (title, ID, creation date)
-- Model configuration (model, temperature, etc.)
-- Complete message history with timestamps
-- System prompts in collapsible sections
-- Clear separation between message pairs with horizontal rules
-- Proper formatting of role headers and timestamps
-
-This improved formatting makes it easy to share conversations with others or store them in a more readable and visually organized format.
-
-### Querying with a Knowledge Base
-
-```bash
-dv2 "Explain the company's financial position." -k "financial_reports"
-```
-
-### Displaying Full Status Information
-
-```bash
-dv2 "Your query here" --status -P
-```
-
-### Listing All Available Information
-
-```bash
-# List models with basic information
-dv2 --list-models
-
-# List models with detailed information
-dv2 -A
-
-# List all templates
-dv2 -l all
-
-# List template names only (concise)
-dv2 -L
-
-# List available knowledge bases
-dv2 -K
-```
-
-### Editing Configuration Files
-
-```bash
-# Edit templates file
-dv2 -E
-
-# Edit defaults configuration
-dv2 -D
-
-# Edit models configuration
-dv2 -d
-```
-
-### Using Different Model Types
-
-```bash
-# Using OpenAI GPT-4o model
-dv2 "Explain quantum physics" -m gpt4o
-
-# Using Anthropic Claude model
-dv2 "Write a poem about nature" -m sonnet
-
-# Using OpenAI o1-preview model
-dv2 "Analyze this data" -m o1-preview
-
-# Using local Ollama model (with Ollama server running)
-dv2 "Translate to French" -m llama3
+# Export formatted conversation
+dv2 "Let's design a system" -T "Architect" -c | dv2 -e current -O > design_discussion.md
 ```
 
 ## Development
 
-### Code Structure
-
-The codebase has been modularized for better maintainability:
-
-- **main.py**: Main CLI interface that connects all modules
-- **utils.py**: General utility functions for string processing and date/time handling
-- **config.py**: Configuration loading and file editing
-- **templates.py**: Template management and display
-- **models.py**: Model information handling and selection
-- **context.py**: Reference files and knowledge base handling
-- **llm_clients.py**: API client initialization and query functions for different LLM providers
-- **display.py**: Status information display
-- **conversations.py**: Conversation history storage and management
-
-This modular approach makes the code easier to maintain, test, and extend with new features.
-
-### Notable Components
-
-#### LLM Clients Module
-
-The `llm_clients.py` module is responsible for handling all interactions with LLM APIs:
-
-- **OpenAI Client**: Handles both standard and O1/O3 models with their specific requirements
-- **Anthropic Client**: Manages Claude model interactions with appropriate headers
-- **Google Client**: Interfaces with Gemini models through the Google API
-- **Ollama Client**: Supports both local and remote Ollama instances with robust response parsing
-
-The Ollama client was recently updated to:
-- Handle various response formats from the chat endpoint
-- Support models with special naming patterns (like "gemma3:4b")
-- Extract and log useful metadata from responses
-- Provide meaningful error messages for different failure modes
-- Handle both streaming and non-streaming responses
-
-#### Conversations Module
-
-The `conversations.py` module provides a sophisticated conversation management system:
-
-- **Message Storage**: Stores conversations as JSON files with message history
-- **State Management**: Tracks metadata like model, temperature, and creation time
-- **Export Capabilities**: Convert conversations to markdown format for sharing
-- **Context Maintenance**: Preserve context across multiple interactions
-
-### Coding Standards
-
-All Python code in this project follows these standards:
-- **Indentation**: ALWAYS use 2-space indentation (never tabs or 4 spaces)
-- **Line Length**: Maximum 100 characters per line
-- **Naming**: snake_case for variables/functions, PascalCase for classes
-- **Documentation**: Docstrings for all public functions, modules, and classes
-- **Error Handling**: Consistent approach with meaningful error messages
-- **Logging**: Structured logging with appropriate levels
-
-### Testing
-
-Run tests using the provided script:
-
-```bash
-./run_tests.sh
+### Project Structure
+```
+dejavu2-cli/
+├── Core Modules
+│   ├── main.py              # CLI orchestration
+│   ├── llm_clients.py       # Provider integrations
+│   ├── conversations.py     # History management
+│   ├── models.py           # Model selection
+│   ├── templates.py        # Agent management
+│   ├── context.py          # Reference handling
+│   ├── config.py           # Configuration
+│   ├── security.py         # Security layer
+│   ├── errors.py           # Exception hierarchy
+│   └── display.py          # Output formatting
+├── Configuration
+│   ├── defaults.yaml       # System defaults
+│   ├── Models.json        # Model registry
+│   └── Agents.json        # Agent templates
+├── Submodules
+│   ├── Models/            # Model management tools
+│   └── Agents/            # Agent management tools
+└── Tests
+    ├── unit/              # Unit tests
+    ├── integration/       # Integration tests
+    └── functional/        # End-to-end tests
 ```
 
-This will run unit, integration, and functional tests using pytest.
+### Coding Standards
+- **Python Style**: 2-space indentation, 100 char line limit
+- **Naming**: snake_case for functions/variables, PascalCase for classes
+- **Documentation**: Google-style docstrings for all public APIs
+- **Error Handling**: Use custom exceptions from `errors.py`
+- **File Endings**: All Python scripts must end with `#fin`
 
-The test suite includes:
-- **Unit Tests**: Testing individual functions and classes
-- **Integration Tests**: Testing interactions between components
-- **Functional Tests**: Testing end-to-end functionality
+### Testing
+```bash
+# Run all tests
+./run_tests.sh
+
+# Run specific test categories
+./run_tests.sh --unit
+./run_tests.sh --integration
+./run_tests.sh --functional
+
+# Run with coverage
+./run_tests.sh --coverage
+
+# Run specific test
+python -m pytest tests/unit/test_security.py -v
+```
+
+### Adding New Features
+
+1. **New LLM Provider**
+   - Add client class to `llm_clients.py`
+   - Update `initialize_clients()` and `query()` functions
+   - Add models to `Models.json`
+   - Create provider update module in `Models/utils/dv2-update-models/providers/`
+
+2. **New Agent Template**
+   - Add entry to `Agents.json`
+   - Use `dv2-agents insert` command
+   - Test with various queries
+   - Set appropriate availability/enabled levels
+
+3. **New CLI Option**
+   - Add Click option to `main.py`
+   - Update relevant processing functions
+   - Add tests for new functionality
+   - Update documentation
+
+## Troubleshooting
+
+### Common Issues
+
+**API Key Problems**
+```bash
+# Check if keys are set
+dv2 --status | grep "API Keys"
+
+# Verify specific key
+echo $ANTHROPIC_API_KEY
+```
+
+**Model Not Found**
+```bash
+# List available models
+dv2 --list-models
+
+# Check model details
+./Models/dv2-models-list -F "alias:contains:sonnet"
+```
+
+**Conversation Issues**
+```bash
+# List conversations
+dv2 -x
+
+# Clean up old conversations
+dv2 -X [conversation-id]
+
+# Force new conversation
+dv2 "query" -n
+```
+
+**Ollama Connection**
+```bash
+# Check if Ollama is running
+curl http://localhost:11434/api/tags
+
+# Use remote Ollama server
+export OLLAMA_HOST=https://your-server.com
+```
+
+### Debug Mode
+```bash
+# Enable verbose logging
+dv2 "test query" -v
+
+# Log to file
+dv2 "test query" --log-file debug.log
+
+# Check configuration
+dv2 --status -P
+```
 
 ## License
 
-This project is licensed under the GPL-3 License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPL-3.0 License. See the [LICENSE](LICENSE) file for details.
 
-## Authors and Contributors
+## Contributing
 
-- **Gary Dean** - Lead Developer
-- **Claude Code** - Documentation and Code Enhancement
-- **AI Community Contributors** - Feature requests, bug reports, and improvements
+Contributions are welcome! Please:
+1. Review [CLAUDE.md](CLAUDE.md) for development guidelines
+2. Follow the coding standards
+3. Add tests for new features
+4. Update documentation as needed
 
-### Contributing
+## Support
 
-We welcome contributions! Please see the [CLAUDE.md](CLAUDE.md) file for development guidelines and coding standards.
+- **Issues**: [GitHub Issues](https://github.com/Open-Technology-Foundation/dejavu2-cli/issues)
+- **Documentation**: Check `docs/` directory for detailed guides
+- **Community**: Join discussions in the issues section
 
-### Support
+---
 
-If you encounter issues or have feature requests:
-- Check existing issues on GitHub
-- Create a new issue with detailed information
-- Follow the project for updates
+**Current Version**: 0.8.30 | **Status**: Active Development | **Python**: 3.7+
 
-## Project Status
-
-**Current Version**: 0.8.22 (Active Development)
-
-This project is in active development with regular updates and improvements. Check the [GitHub repository](https://github.com/Open-Technology-Foundation/dejavu2-cli) for the latest releases and features.
-
-### Recent Updates
-- Enhanced conversation management system
-- Improved error handling and security validation
-- Extended LLM provider support
-- Better Ollama integration for local models
-
+#fin

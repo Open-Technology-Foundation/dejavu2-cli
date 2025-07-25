@@ -1,171 +1,233 @@
-# WAH.ID Model Registry
+# AI Model Registry
 
-This directory contains the model registry and configuration tools for the WAH.ID platform, allowing integration with multiple LLM providers.
+This directory maintains the canonical `Models.json` file - a comprehensive registry of AI models that serves as the central source of truth for multiple applications and utilities.
+
+## Overview
+
+The `Models.json` file is a critical infrastructure component that provides:
+- Unified model definitions across multiple AI providers (OpenAI, Anthropic, Google, Meta, xAI, etc.)
+- Standardized configuration parameters for consistent API interactions
+- Model capabilities, limitations, and availability status
+- Cost information and usage constraints
+
+### Applications Using Models.json
+
+This registry powers several applications:
+- **dejavu2-cli / dv2**: Command-line LLM interface with multi-provider support
+- **customkb**: Knowledge base system with AI integration
+- **WAHID website**: Web-based AI interaction platform
+- **Various utility programs**: Model selection, cost analysis, and capability checking tools
 
 ## Models.json Structure
 
-The `Models.json` file serves as the central registry for all AI models available in the WAH.ID platform. It defines models, their capabilities, and configuration parameters used when connecting to various LLM providers.
-
-### Field Definitions
-
-Each model entry in the `Models.json` file contains the following fields:
+Each model entry contains standardized fields that enable consistent handling across applications:
 
 | Field | Type | Description | Example |
 |-------|------|-------------|---------|
-| `model` | String | Official model identifier used in API calls | `"gpt-4o"` |
-| `alias` | String | Short nickname for easy reference in commands | `"g4o"` |
+| `model` | String | Official API identifier | `"gpt-4o"`, `"claude-3-5-sonnet-latest"` |
+| `alias` | String | Short memorable nickname | `"g4o"`, `"sonnet35"` |
 | `parent` | String | Provider organization | `"OpenAI"`, `"Anthropic"`, `"Google"` |
-| `model_category` | String | Type of model functionality | `"LLM"`, `"image"`, `"embed"` |
-| `family` | String | Model family grouping | `"gpt4"`, `"claude3"`, `"gemini"` |
-| `series` | String | Sub-grouping within a family | `"opus"`, `"sonnet"`, `"haiku"` |
-| `description` | String | Human-readable explanation of capabilities | `"Latest flagship model with..."` |
-| `training_data` | String | Date/period when trained | `"2023-12"` |
-| `data_cutoff_date` | String | Knowledge cutoff date (YYYY-MM-DD) | `"2023-12-01"` |
+| `model_category` | String | Functional type | `"LLM"`, `"image"`, `"embed"`, `"tts"` |
+| `family` | String | Model lineage group | `"gpt4"`, `"claude3"`, `"gemini"` |
+| `series` | String | Sub-family classification | `"opus"`, `"sonnet"`, `"haiku"` |
+| `description` | String | Human-readable capabilities | `"Advanced reasoning model with..."` |
+| `training_data` | String | Training period | `"2024-10"` |
+| `data_cutoff_date` | String | Knowledge cutoff (YYYY-MM-DD) | `"2024-10-01"` |
 | `url` | String | Primary API endpoint | `"https://api.openai.com/v1"` |
-| `url2` | String | Fallback API endpoint (optional) | `"https://api-fallback.openai.com/v1"` |
-| `apikey` | String | Environment variable name for API credentials | `"OPENAI_API_KEY"` |
-| `context_window` | Number | Maximum input token limit | `128000` |
-| `max_output_tokens` | Number | Maximum response length limit | `4096` |
-| `token_costs` | String | Cost information (informational only) | `"$0.01/0.03 per 1K tokens"` |
-| `vision` | Number | Vision capabilities flag (1=yes, 0=no) | `1` |
+| `url2` | String | Fallback endpoint (optional) | `"https://api-fallback.openai.com/v1"` |
+| `apikey` | String | Environment variable name | `"OPENAI_API_KEY"` |
+| `context_window` | Number | Maximum input tokens | `128000` |
+| `max_output_tokens` | Number | Maximum response tokens | `4096` |
+| `token_costs` | String | Pricing information | `"$5.00/$15.00 per 1M tokens"` |
+| `vision` | Number | Vision capability (0/1) | `1` |
 | `available` | Number | Availability level (0-9) | `9` |
-| `enabled` | Number | Control flag (0=disabled, 1-9=enabled) | `1` |
-| `output_dimension` | Number | Vector dimensions for embedding models | `1536` |
+| `enabled` | Number | Enabled status (0-9) | `1` |
+| `output_dimension` | Number | Embedding vector size | `1536` |
+| `info_updated` | String | Last update timestamp | `"2025-07-25 11:50:42"` |
 
-### Model Categories
+### Availability and Enabled Levels
 
-The `model_category` field classifies models by their primary function:
+**Available** (0-9): Provider-side availability
+- `0`: Not available (deprecated, API down)
+- `1-3`: Limited availability (experimental, beta)
+- `4-6`: Generally available
+- `7-9`: Production-ready, high availability
 
-- `LLM`: Text generation models (e.g., GPT-4, Claude 3)
-- `image`: Image generation models (e.g., DALL-E 3, Midjourney)
-- `tts`: Text-to-speech models (e.g., OpenAI TTS)
-- `stt`: Speech-to-text models (e.g., Whisper)
-- `embed`: Embedding/vector models (e.g., text-embedding-3-large)
-- `audio`: Audio processing models
-- `moderation`: Content moderation models
+**Enabled** (0-9): Local usage preference
+- `0`: Disabled (won't be used)
+- `1-3`: Testing/development use
+- `4-6`: General use
+- `7-9`: Preferred models
 
-### Availability and Enabled Flags
+## Utility Scripts
 
-The numeric level system for `available` and `enabled` fields allows fine-grained control:
-
-#### Available Flag
-- `0`: Model is not available (API down, deprecated, etc.)
-- `1-3`: Low availability (limited capacity, experimental)
-- `4-6`: Medium availability (generally reliable)
-- `7-9`: High availability (production-ready)
-
-#### Enabled Flag
-- `0`: Model is disabled and cannot be used
-- `1-3`: Enabled for testing or limited use
-- `4-6`: Enabled for general use
-- `7-9`: Preferred models (highlighted in UI)
-
-These numeric levels allow filtering models by availability level or preference tier.
-
-### Example Model Entry
-
-```json
-"claude-3-7-sonnet-20250219": {
-  "model": "claude-3-7-sonnet-20250219",
-  "alias": "c3.7s",
-  "parent": "Anthropic",
-  "model_category": "LLM",
-  "family": "claude3",
-  "series": "sonnet",
-  "description": "Claude 3.7 Sonnet - balanced LLM with enhanced reasoning",
-  "training_data": "2025-02",
-  "data_cutoff_date": "2025-02-01",
-  "url": "https://api.anthropic.com/v1/messages",
-  "apikey": "ANTHROPIC_API_KEY",
-  "context_window": 200000,
-  "max_output_tokens": 4096,
-  "token_costs": "$0.013/0.015 per 1K tokens",
-  "vision": 1,
-  "available": 9,
-  "enabled": 9
-}
-```
-
-## Integration with WAH.ID
-
-### Model Selection Flow
-
-1. **Initialization**:
-   - The `llm_query.php` system loads models from `Models.json` on startup
-   - Models are filtered by `available` and `enabled` status
-   - Default models are selected based on priority settings
-
-2. **User Selection**:
-   - Users select models through the Control Panel interface
-   - Model selection is stored in the user's state via `StateManagerV3`
-   - The selection persists across sessions until changed
-
-3. **API Request Process**:
-   - When a query is made, the system uses the model configuration to:
-     - Format the message appropriately for the provider
-     - Set context window constraints
-     - Apply token limits
-     - Select the correct endpoint URL
-     - Use the appropriate environment variable for authentication
-
-### Provider-Specific Processing
-
-Each provider requires specific message formatting and parameter handling:
-
-- **OpenAI**: JSON with roles, content objects, and vision handlers
-- **Anthropic**: Messages with human/assistant structure and media objects
-- **Google**: Structured content format with parts and inline data
-- **Ollama**: Local model handling with specific parameter mapping
-- **Azure**: OpenAI-compatible with custom authentication mechanism
-- **Custom/Local**: Configuration for custom endpoints and models
-
-## Managing Models
-
-### Adding New Models
-
-To add a new model:
-
-1. Create a new JSON object entry in `Models.json`
-2. Ensure all required fields are populated
-3. Set appropriate `available` and `enabled` flags (typically start with `available: 1, enabled: 0`)
-4. Verify the `parent` field matches a supported provider
-5. Specify the correct environment variable in `apikey`
-6. Use accurate values for `context_window` and `max_output_tokens`
-
-### Updating Model Information
-
-Use the provided utilities to keep model information current:
-
-- `get-anthropic-models.sh`: Retrieves the latest Anthropic model specifications
-- `get-openai-models.sh`: Shows updated OpenAI model information
-- `update_anthropic_models.py`: Automatically updates Anthropic models in the registry
-- `update_openai_models.py`: Automatically updates OpenAI models in the registry
-
-Before making changes, the update scripts create backups and can be run in dry-run mode to preview changes.
-
-In WAHID website, Models can be managed at //modelman.php
-
-### Listing Available Models
-
-Use the `dv2-list-models` utility to view and filter models:
+### dv2-models-list
+Advanced model query and analysis tool with powerful filtering capabilities.
 
 ```bash
-# Show all enabled models
-./dv2-list-models -e 1
+# List all enabled models
+dv2-models-list
 
-# Show only Anthropic models with detailed information
-./dv2-list-models -p anthropic -m long
+# Filter by provider
+dv2-models-list -p OpenAI
 
-# Show models with vision capabilities
-./dv2-list-models --vision
+# Show in table format with vision models only
+dv2-models-list -o table --vision
+
+# Complex filtering
+dv2-models-list -F "context_window:>=:100000" -F "parent:equals:Anthropic"
+
+# Export to different formats
+dv2-models-list -o json > models.json
+dv2-models-list -o csv > models.csv
+
+# Show statistics
+dv2-models-list -S
 ```
+
+**Features**:
+- Multiple output formats (table, json, csv, yaml, tree)
+- Advanced filtering with operators (equals, contains, >, <, between, regex)
+- Statistical analysis mode
+- Sorting and limiting options
+- Filter presets for common queries
+
+### dv2-models-update
+Intelligent update system using Claude CLI to fetch latest model information.
+
+```bash
+# Update all providers
+dv2-models-update --all
+
+# Update specific providers
+dv2-models-update --provider anthropic --provider openai
+
+# Preview changes without applying
+dv2-models-update --all --dry-run
+
+# Use different Claude model for searches
+dv2-models-update --all --model opus
+
+# Force update (bypass cache)
+dv2-models-update --provider google --force
+```
+
+**Features**:
+- Real-time web searches for current model info
+- Automatic conflict resolution for aliases
+- Change tracking with timestamps
+- 24-hour intelligent caching
+- Backup creation before updates
+- Dry-run mode for safety
+
+### check_models_json.py
+Validates the integrity of Models.json file.
+
+```bash
+# Run validation
+python check_models_json.py
+```
+
+**Validations**:
+- JSON syntax correctness
+- Duplicate model IDs
+- Duplicate aliases
+- Required fields presence
+- Data type validation
+- Provider distribution report
+
+## Best Practices
+
+### For Application Developers
+1. **Never modify Models.json directly** - Use update scripts to maintain consistency
+2. **Check both `available` and `enabled`** - Models need both to be usable
+3. **Use aliases for user-facing interfaces** - They're more memorable than model IDs
+4. **Handle missing optional fields** - Not all models have all fields
+5. **Cache model data appropriately** - The registry can be large
+
+### For Model Registry Maintainers
+1. **Run validation after manual edits**: `python check_models_json.py`
+2. **Use dry-run first**: Test updates with `--dry-run` before applying
+3. **Keep backups**: The update script creates them automatically
+4. **Update regularly**: Model information changes frequently
+5. **Preserve custom settings**: Update scripts maintain local modifications
+
+### Adding New Models
+1. Use the update scripts when possible - they ensure consistency
+2. For manual additions, include all required fields
+3. Start new models with `available: 1, enabled: 0` for testing
+4. Ensure aliases are unique across all models
+5. Validate the file after changes
 
 ## Security Considerations
 
-- API keys are never stored in `Models.json`, only environment variable names
-- Enable only the models you need to minimize risk and cost
-- Set appropriate availability levels based on reliability testing
-- Monitor usage patterns to detect anomalies
-- Keep model information updated to maintain security and performance
+- **API Keys**: Never stored in Models.json - only environment variable names
+- **Endpoints**: Verify URLs are legitimate provider endpoints
+- **Access Control**: Limit write access to Models.json
+- **Validation**: Always validate after updates to prevent injection
+- **Backups**: Maintain backups before any modifications
+
+## Directory Structure
+
+```
+Models/
+├── Models.json              # The canonical model registry
+├── README.md               # This documentation
+├── CLAUDE.md               # Claude Code guidance
+├── check_models_json.py    # Validation utility
+├── dv2-models-list         # Symlink to query utility
+├── dv2-models-update       # Symlink to update utility
+└── utils/
+    ├── dv2-models-list/    # Model query and analysis tool
+    │   ├── dv2-models-list.py
+    │   ├── filters/        # Filter implementations
+    │   ├── formatters/     # Output formatters
+    │   └── ...
+    └── dv2-update-models/  # Claude-based update system
+        ├── claude-update-models.py
+        ├── providers/      # Provider-specific modules
+        └── ...
+```
+
+## Quick Reference
+
+```bash
+# List available models
+dv2-models-list
+
+# Update model information
+dv2-models-update --all
+
+# Validate registry
+python check_models_json.py
+
+# Find specific models
+dv2-models-list -F "model:contains:gpt"
+
+# Export for analysis
+dv2-models-list -o csv > analysis.csv
+
+# Check provider coverage
+dv2-models-list -S
+```
+
+## Troubleshooting
+
+**Models not appearing in applications:**
+- Check `enabled` > 0
+- Verify `available` > 0
+- Ensure required fields are present
+- Validate JSON syntax
+
+**Update script failures:**
+- Check internet connectivity
+- Verify Claude CLI is installed and configured
+- Clear cache if getting stale results: `rm -rf .cache/`
+- Use `--force` to bypass cache
+
+**Validation errors:**
+- Run `check_models_json.py` for detailed error report
+- Check for duplicate aliases
+- Ensure numeric fields contain numbers, not strings
 
 #fin
