@@ -31,8 +31,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Constants
-MODELS_JSON_PATH = Path(__file__).parent.parent / "Models.json"
-CACHE_DIR = Path(__file__).parent / ".cache"
+# Resolve symlinks to find the actual script location
+script_path = Path(__file__).resolve()
+MODELS_JSON_PATH = script_path.parent.parent.parent / "Models.json"
+# Use XDG cache directory or fallback to ~/.cache
+CACHE_DIR = Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'dv2-models-update'
 CACHE_EXPIRY_HOURS = 24
 
 # Provider registry
@@ -55,7 +58,7 @@ class ClaudeModelUpdater:
         self.force = force
         self.model = model
         self.cache_dir = CACHE_DIR
-        self.cache_dir.mkdir(exist_ok=True)
+        self.cache_dir.mkdir(parents=True, exist_ok=True)
         
     def query_claude(self, prompt: str, use_cache: bool = True) -> Dict[str, Any]:
         """Execute claude CLI with --print flag"""

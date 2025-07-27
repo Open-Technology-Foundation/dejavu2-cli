@@ -3,7 +3,7 @@ Anthropic provider module for Claude-based model updates
 """
 
 import logging
-from typing import Dict, List, Any
+from typing import Dict, Any
 from . import BaseProvider
 
 logger = logging.getLogger(__name__)
@@ -15,42 +15,24 @@ class AnthropicProvider(BaseProvider):
     @staticmethod
     def get_search_prompt() -> str:
         """Return the prompt for Claude to search for Anthropic model information"""
-        # Load current Anthropic models from Models.json if available
-        current_models = {}
-        try:
-            from pathlib import Path
-            import json
-            models_json_path = Path(__file__).parent.parent.parent / "Models.json"
-            if models_json_path.exists():
-                with open(models_json_path, 'r') as f:
-                    all_models = json.load(f)
-                    # Filter for Anthropic models
-                    current_models = {
-                        k: v for k, v in all_models.items() 
-                        if v.get('parent') == 'Anthropic'
-                    }
-        except Exception:
-            # If we can't load Models.json, continue without it
-            pass
-        
-        prompt = """Search for Anthropic's current model information and return a JSON object with this exact structure:
+        prompt = """Search for ALL current Anthropic Claude models from their official documentation and API references. Return a complete JSON object with this exact structure for EACH model:
 
 ```json
 {
-  "claude-3-5-sonnet-latest": {
-    "model": "claude-3-5-sonnet-latest",
-    "alias": "sonnet35",
+  "model-id-here": {
+    "model": "model-id-here",
+    "alias": "short-alias",
     "parent": "Anthropic",
     "model_category": "LLM",
     "family": "anthropic",
     "series": "claude3",
-    "description": "Claude 3.5 Sonnet",
-    "data_cutoff_date": "2024-04",
+    "description": "Model description",
+    "data_cutoff_date": "YYYY-MM",
     "url": "https://api.anthropic.com/v1",
     "apikey": "ANTHROPIC_API_KEY",
     "context_window": 200000,
     "max_output_tokens": 8192,
-    "token_costs": "$3.00/$15.00",
+    "token_costs": "$X.XX/$Y.YY",
     "vision": 1,
     "available": 1,
     "enabled": 0
@@ -58,25 +40,20 @@ class AnthropicProvider(BaseProvider):
 }
 ```
 
-"""
-        
-        if current_models:
-            prompt += "Here are the current Anthropic models in Models.json that need to be updated with the latest information:\n\n```json\n"
-            prompt += json.dumps(current_models, indent=2)
-            prompt += "\n```\n\n"
-            prompt += "Update these models with the latest information and add any new models that are missing.\n"
-        else:
-            prompt += "Include all current Anthropic models.\n"
-        
-        prompt += """
-Include accurate information for:
+Include ALL current Anthropic models:
+- All Claude 3.5 models (Sonnet, Haiku, etc.)
+- All Claude 3 models (Opus, Sonnet, Haiku)
+- All Claude 4 models (Opus 4, Sonnet 4)
+- Both "latest" versions and dated versions (e.g., claude-3-5-sonnet-latest AND claude-3-5-sonnet-20241022)
+
+For each model provide:
 - model: exact model ID for API calls
-- alias: short nickname
-- context_window: max input tokens
-- max_output_tokens: max output tokens
-- token_costs: format as "$INPUT/$OUTPUT"
-- data_cutoff_date: format as "YYYY-MM"
-- vision: 1 if supports images, 0 if not
+- alias: short memorable nickname (e.g., "sonnet35" for claude-3-5-sonnet-latest)
+- context_window: maximum input tokens
+- max_output_tokens: maximum output tokens
+- token_costs: format as "$INPUT_COST/$OUTPUT_COST" per million tokens
+- data_cutoff_date: training data cutoff in "YYYY-MM" format
+- vision: 1 if supports image inputs, 0 if text-only
 
 CRITICAL: Your response must be ONLY valid JSON starting with { and ending with }. Do not include ANY text before or after the JSON. Do not wrap in markdown code blocks. Do not include explanations."""
         
