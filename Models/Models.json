@@ -751,6 +751,25 @@
     "enabled": 1,
     "info_updated": "2025-07-25 12:04:16"
   },
+  "gemini-embedding-001": {
+    "model": "gemini-embedding-001",
+    "alias": "gemini-embed",
+    "parent": "Google",
+    "model_category": "embed",
+    "family": "google",
+    "series": "gemini",
+    "description": "Google's latest embedding model with configurable dimensions (768/1536/3072) and Matryoshka Representation Learning",
+    "data_cutoff_date": "",
+    "url": "https://generativelanguage.googleapis.com",
+    "apikey": "GOOGLE_API_KEY",
+    "context_window": 30720,
+    "max_output_tokens": 0,
+    "token_costs": "Varies by usage tier",
+    "vision": 0,
+    "available": 1,
+    "enabled": 1,
+    "info_updated": "2025-07-27"
+  },
   "tts-1": {
     "model": "tts-1",
     "alias": "tts1",
