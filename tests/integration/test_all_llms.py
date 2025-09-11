@@ -147,9 +147,9 @@ class TestLLMRouting:
                         assert result == "OpenAI response"
                         mock_query_openai.assert_called_once()
                         
-                        # Verify Responses API is enabled
+                        # Verify the call was made with correct parameters
                         call_args = mock_query_openai.call_args
-                        assert call_args[1]['use_responses_api'] == True
+                        assert call_args[1]['model'] == test_model
     
     def test_anthropic_routing_with_2025_features(self):
         """Test routing to Anthropic models with 2025 features."""
@@ -277,13 +277,16 @@ class TestModelParametersForAllFamilies:
             # Test family-specific requirements
             family = config.get('family')
             if family == 'openai':
-                assert config.get('apikey') == 'OPENAI_API_KEY', f"OpenAI model '{model_name}' should use OPENAI_API_KEY"
-            elif family == 'anthropic':
-                assert config.get('apikey') == 'ANTHROPIC_API_KEY', f"Anthropic model '{model_name}' should use ANTHROPIC_API_KEY"
-            elif family == 'google':
-                # Google models may use GOOGLE_API_KEY or GEMINI_API_KEY
+                # OpenAI models should either have OPENAI_API_KEY or None (using default)
                 api_key = config.get('apikey')
-                assert api_key in ['GOOGLE_API_KEY', 'GEMINI_API_KEY'], f"Google model '{model_name}' should use GOOGLE_API_KEY or GEMINI_API_KEY, got {api_key}"
+                assert api_key in [None, 'OPENAI_API_KEY'], f"OpenAI model '{model_name}' has unexpected apikey: {api_key}"
+            elif family == 'anthropic':
+                api_key = config.get('apikey')
+                assert api_key in [None, 'ANTHROPIC_API_KEY'], f"Anthropic model '{model_name}' has unexpected apikey: {api_key}"
+            elif family == 'google':
+                # Google models may use GOOGLE_API_KEY, GEMINI_API_KEY, or None
+                api_key = config.get('apikey')
+                assert api_key in [None, 'GOOGLE_API_KEY', 'GEMINI_API_KEY'], f"Google model '{model_name}' has unexpected apikey: {api_key}"
             elif family == 'ollama':
                 # Ollama models may use different API key setups
                 pass

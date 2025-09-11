@@ -32,7 +32,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - `config.py` - Configuration loading from YAML/JSON files
   - `models.py` - Model definitions and selection logic
   - `templates.py` - Template management for parameter presets
-  - `context.py` - Reference files and knowledge base handling
+  - `context.py` - Reference files and knowledgebase handling
   - `security.py` - Input validation and secure subprocess execution
   - `errors.py` - Custom exception hierarchy for precise error handling
 - **Configuration**: 
@@ -56,7 +56,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - LLM clients handle provider-specific requirements (O1/O3 models need special parameter handling)
 - Conversation system maintains context across sessions with metadata tracking
 - Template system allows parameter presets for consistent usage patterns
-- Knowledge base integration via customKB for context enhancement
+- Knowledgebase integration via customKB for context enhancement
 - Robust error handling with meaningful messages and bypass options
 
 ## Ollama Integration Details

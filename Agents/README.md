@@ -20,7 +20,7 @@ Each agent entry in the `Agents.json` file contains the following fields:
 | `model` | String | Yes | LLM model identifier (must match an entry in Models.json) | `"claude-3-7-sonnet-latest"` |
 | `max_tokens` | Number | Yes | Maximum output token limit for responses | `4000` |
 | `temperature` | Number | Yes | Creativity/randomness setting (0.0-1.0) | `0.7` |
-| `knowledgebase` | String | No | Optional path to a knowledge base configuration | `"kb/programming.json"` |
+| `knowledgebase` | String | No | Optional path to a knowledgebase configuration | `"kb/programming.json"` |
 | `monospace` | Boolean | Yes | Flag indicating if output should be displayed in monospace format | `true` |
 | `available` | Number | Yes | Availability status (0=unavailable, 1-9=available) | `1` |
 | `enabled` | Number | Yes | Whether the agent is active (0=disabled, 1-9=enabled) | `1` |
@@ -135,11 +135,11 @@ Similar to the model registry, agents use numeric flags for availability and ena
      - Applies all configured parameters (temperature, token limits, etc.)
      - Processes any special variables in the system prompt
 
-### Knowledge Base Integration
+### Knowledgebase Integration
 
 For agents with a `knowledgebase` parameter:
 
-1. The specified knowledge base file is loaded
+1. The specified knowledgebase file is loaded
 2. Content is processed and formatted for context inclusion
 3. Relevant knowledge is included in API requests to enhance agent responses
 4. The agent can reference this information when answering user queries
@@ -228,7 +228,7 @@ This naming convention helps users quickly identify agents by both their referen
 ## Security Considerations
 
 - System prompts should never contain sensitive information
-- Validate that knowledge base files don't contain proprietary data
+- Validate that knowledgebase files don't contain proprietary data
 - Enable only the agents appropriate for your organization's needs
 - Monitor agent usage for unexpected behavior
 - Review system prompts periodically for accuracy and up-to-date guidance

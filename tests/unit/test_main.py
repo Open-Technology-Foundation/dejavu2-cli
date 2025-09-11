@@ -306,7 +306,8 @@ class TestMain:
         ])
         
         assert result.exit_code == 1
-        assert "not found" in result.output
+        # Changed error message when model is None
+        assert "Model name cannot be None or empty" in result.output
     
     def test_main_no_query(self):
         """Test behavior when no query is provided."""

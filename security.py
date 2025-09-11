@@ -41,7 +41,7 @@ class SubprocessConfig:
 
 def validate_knowledgebase_query(query: str) -> str:
   """
-  Validate and sanitize knowledge base query input.
+  Validate and sanitize knowledgebase query input.
   
   Args:
       query: Raw query string from user input
@@ -53,7 +53,7 @@ def validate_knowledgebase_query(query: str) -> str:
       ValidationError: If query contains dangerous patterns
   """
   if not query or not query.strip():
-    raise ValidationError("Knowledge base query cannot be empty")
+    raise ValidationError("Knowledgebase query cannot be empty")
   
   # Remove leading/trailing whitespace
   query = query.strip()
@@ -64,7 +64,7 @@ def validate_knowledgebase_query(query: str) -> str:
   
   # Check for dangerous shell metacharacters
   dangerous_patterns = [
-    r'[;&|<>`!]',             # Basic shell metacharacters
+    r'[;&|<>`]',              # Basic shell metacharacters (removed ! as it's common punctuation)
     r'\\x[0-9a-fA-F]{2}',     # Hex escape sequences
     r'\\[0-7]{1,3}',          # Octal escape sequences
     r'\$\([^)]*\)',           # Command substitution
@@ -84,7 +84,7 @@ def validate_knowledgebase_query(query: str) -> str:
   if not re.match(safe_pattern, query):
     raise ValidationError("Query contains invalid characters")
   
-  logger.debug(f"Validated knowledge base query: {query[:50]}...")
+  logger.debug(f"Validated knowledgebase query: {query[:50]}...")
   return query
 
 def validate_editor_path(editor_path: str) -> str:
@@ -307,7 +307,7 @@ class SecureSubprocess:
 
 # Pre-configured subprocess instances for common use cases
 def get_knowledgebase_subprocess() -> SecureSubprocess:
-  """Get a secure subprocess configured for knowledge base operations."""
+  """Get a secure subprocess configured for knowledgebase operations."""
   config = SubprocessConfig(
     allowed_commands=['customkb'],
     max_args=6,

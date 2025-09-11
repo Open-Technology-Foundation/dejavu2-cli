@@ -32,7 +32,7 @@ The LLM landscape is fragmented across multiple providers, each with distinct AP
 
 ### 3. Context Enhancement
 - **Reference Files**: Include multiple files as context (`-r file1.txt,file2.txt`)
-- **Knowledge Bases**: Integrate with customKB vector databases (`-k knowledge_base`)
+- **Knowledgebases**: Integrate with customKB vector databases (`-k knowledge_base`)
 - **Dynamic Assembly**: Automatically formats and includes context in queries
 
 ### 4. Template System
@@ -71,7 +71,7 @@ dv2 -L
 # Include reference files
 dv2 "Review this code for issues" -r main.py,utils.py
 
-# Query with knowledge base
+# Query with knowledgebase
 dv2 "What are the latest findings?" -k research_papers
 ```
 

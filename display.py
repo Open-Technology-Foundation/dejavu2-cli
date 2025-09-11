@@ -64,7 +64,7 @@ def display_status(
     click.echo(f"Temperature: {kwargs['temperature']}")
     click.echo(f"Max Tokens: {kwargs['max_tokens']}")
     click.echo(f"Reference Files: {kwargs['reference'] if kwargs['reference'] else 'None'}")
-    click.echo(f"Knowledge Base: {kwargs['knowledgebase'] if kwargs['knowledgebase'] else 'None'}")
+    click.echo(f"Knowledgebase: {kwargs['knowledgebase'] if kwargs['knowledgebase'] else 'None'}")
     
     # Section 5: Query Content
     click.echo("\n=== QUERY CONTENT ===")

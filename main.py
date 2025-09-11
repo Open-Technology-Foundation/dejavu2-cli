@@ -13,9 +13,10 @@ import xml.sax.saxutils
 from datetime import datetime
 import click
 from typing import Any, Dict, List, Optional
+from post_slug import post_slug
 
 # Import modules from the project
-from utils import setup_logging, post_slug, spacetime_placeholders
+from utils import setup_logging, spacetime_placeholders
 from config import load_config, edit_yaml_file, edit_json_file
 from templates import get_template, list_templates, list_template_names
 from models import get_canonical_model, list_models
@@ -150,7 +151,7 @@ def handle_utility_commands(kwargs: Dict[str, Any], paths: Dict[str, str]) -> bo
     try:
       list_knowledge_bases(paths['vectordbs_path'])
     except KnowledgeBaseError as e:
-      click.echo(f"Knowledge base error: {e}", err=True)
+      click.echo(f"Knowledgebase error: {e}", err=True)
       sys.exit(1)
     return True
     
@@ -402,7 +403,7 @@ def prepare_query_execution(kwargs: Dict[str, Any], config: Dict[str, Any], path
       logger.debug(f"Using {len(conversation_messages)} messages from conversation history")
       messages.extend(conversation_messages)
 
-  # Process references and knowledge base
+  # Process references and knowledgebase
   reference_string, knowledgebase_string = process_reference_and_knowledge(
     kwargs, paths, api_keys, knowledgebase_query
   )
@@ -562,11 +563,11 @@ def setup_model_and_clients(kwargs: Dict[str, Any], models_json_path: str) -> tu
 
 def process_reference_and_knowledge(kwargs: Dict[str, Any], paths: Dict[str, str], api_keys: Dict[str, str], knowledgebase_query: str) -> tuple:
   """
-  Process reference files and knowledge base content for inclusion in queries.
+  Process reference files and knowledgebase content for inclusion in queries.
   
   This function handles two types of contextual information:
   1. Reference files: Text files specified via -r/--reference flag
-  2. Knowledge base: Vector database content queried via -k/--knowledgebase flag
+  2. Knowledgebase: Vector database content queried via -k/--knowledgebase flag
   
   Both are formatted as XML-wrapped strings for safe inclusion in LLM queries.
   
@@ -574,16 +575,16 @@ def process_reference_and_knowledge(kwargs: Dict[str, Any], paths: Dict[str, str
     kwargs: Command-line arguments containing reference and knowledgebase options
     paths: Dictionary of file paths including customkb_executable and vectordbs_path
     api_keys: API keys dictionary for potential KB authentication
-    knowledgebase_query: Query string to send to the knowledge base
+    knowledgebase_query: Query string to send to the knowledgebase
     
   Returns:
     tuple: (reference_string, knowledgebase_string)
       - reference_string (str): XML-wrapped content of reference files
-      - knowledgebase_string (str): XML-wrapped knowledge base query results
+      - knowledgebase_string (str): XML-wrapped knowledgebase query results
     
   Raises:
     ReferenceError: If reference files cannot be read or processed
-    KnowledgeBaseError: If knowledge base cannot be queried
+    KnowledgeBaseError: If knowledgebase cannot be queried
     SystemExit: On file not found or unexpected errors (exits with code 1)
   """
   # Process references
@@ -620,7 +621,7 @@ def process_reference_and_knowledge(kwargs: Dict[str, Any], paths: Dict[str, str
           api_keys
         )
       except KnowledgeBaseError as e:
-        error_msg = f"Knowledge base error: {e}"
+        error_msg = f"Knowledgebase error: {e}"
         if bypass_kb_errors:
           click.echo(f"Warning: {error_msg} (continuing without knowledgebase)", err=True)
           knowledgebase_string = f"<knowledgebase>\n# Error querying knowledgebase (continuing without it)\n</knowledgebase>\n\n"
@@ -666,9 +667,9 @@ def process_reference_and_knowledge(kwargs: Dict[str, Any], paths: Dict[str, str
 @click.option('-r', '--reference', default=None,
         help='A comma-delimited list of text files for inclusion as context before the query')
 @click.option('-k', '--knowledgebase', default=None,
-        help='The knowledge base for the query (eg, "my_knowledge_base")')
+        help='The knowledgebase for the query (eg, "my_knowledge_base")')
 @click.option('-Q', '--knowledgebase-query', default=None,
-        help='Query to be sent to the knowledge base instead of the command-line query')
+        help='Query to be sent to the knowledgebase instead of the command-line query')
 
 @click.option('-S', '--status', is_flag=True, default=False,
         help='Display the state of all arguments and exit')
@@ -684,7 +685,7 @@ def process_reference_and_knowledge(kwargs: Dict[str, Any], paths: Dict[str, str
 @click.option('-L', '--list-template-names', is_flag=True, default=False,
         help='List the templates, without the systemprompt')
 @click.option('-K', '--list-knowledge-bases', is_flag=True, default=False,
-        help='List all available knowledge bases')
+        help='List all available knowledgebases')
 
 @click.option('-E', '--edit-templates', is_flag=True, default=False,
         help='Edit Agents.json file')
@@ -744,7 +745,7 @@ def main(**kwargs: Any) -> None:
 
     Features include:
     - Querying various LLM providers (OpenAI, Anthropic, local models)
-    - Including reference files and knowledge base content with queries
+    - Including reference files and knowledgebase content with queries
     - Using templates for consistent parameters
     - Maintaining conversation history across multiple interactions
     - Saving and loading conversations

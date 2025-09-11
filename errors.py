@@ -97,12 +97,12 @@ class ReferenceError(DejavuError):
 
 class KnowledgeBaseError(DejavuError):
     """
-    Raised when knowledge base operations fail.
+    Raised when knowledgebase operations fail.
     
     Examples:
-    - Knowledge base executable not found
-    - Knowledge base query execution failures
-    - Invalid knowledge base configuration
+    - Knowledgebase executable not found
+    - Knowledgebase query execution failures
+    - Invalid knowledgebase configuration
     - Security validation failures for KB queries
     """
     pass

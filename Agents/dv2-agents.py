@@ -9,6 +9,10 @@ import argparse
 import re
 from typing import Dict, Any
 
+# Add parent directory to path to import security module
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from security import get_editor_subprocess, validate_editor_path
+
 DEFAULT_EDITOR = '/usr/bin/nano'
 
 script_dir = os.path.dirname(os.path.realpath(__file__))
@@ -152,8 +156,15 @@ def edit_agent(data: Dict[str, Any], key: str):
   # Get editor from environment or use default
   editor = os.environ.get('EDITOR', DEFAULT_EDITOR)
 
-  # Open editor
-  os.system(f'{editor} {temp_filename}')
+  # Open editor with secure subprocess
+  try:
+    safe_editor = validate_editor_path(editor)
+    secure_subprocess = get_editor_subprocess()
+    secure_subprocess.run([safe_editor, temp_filename])
+  except Exception as e:
+    print(f"Error opening editor: {e}", file=sys.stderr)
+    os.unlink(temp_filename)
+    return
 
   # Read modified content
   with open(temp_filename, 'r') as tf:
@@ -195,8 +206,15 @@ def XXXedit_agent(data: Dict[str, Any], key: str):
   # Get editor from environment or use default
   editor = os.environ.get('EDITOR', DEFAULT_EDITOR)
 
-  # Open editor
-  os.system(f'{editor} {temp_filename}')
+  # Open editor with secure subprocess
+  try:
+    safe_editor = validate_editor_path(editor)
+    secure_subprocess = get_editor_subprocess()
+    secure_subprocess.run([safe_editor, temp_filename])
+  except Exception as e:
+    print(f"Error opening editor: {e}", file=sys.stderr)
+    os.unlink(temp_filename)
+    return
 
   # Read modified content
   with open(temp_filename, 'r') as tf:

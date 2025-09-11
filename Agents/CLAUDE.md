@@ -37,7 +37,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `enabled`: Active status (0=disabled, 1-9=enabled)
 
 ### Optional Fields
-- `knowledgebase`: Path to knowledge base configuration
+- `knowledgebase`: Path to knowledgebase configuration
 - `spacetime`: Template for time/date info (`{{spacetime}}`)
 - `top_p`: Nucleus sampling parameter
 - `frequency_penalty`: Repetition reduction (-2.0 to 2.0)
@@ -69,7 +69,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **0.4-0.6**: Balanced (general assistance)
 - **0.7-1.0**: Creative (brainstorming, writing)
 
-### Knowledge Base Integration
+### Knowledgebase Integration
 - KB paths relative to `/var/lib/vectordbs/`
 - Format: `/var/lib/vectordbs/domain/config.cfg`
 - Used for enhanced context in specialized domains

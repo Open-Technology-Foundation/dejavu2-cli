@@ -1,0 +1,130 @@
+#!/bin/bash
+# Bash completion for dejavu2-cli, dv2, and dv2c
+# Based on main.py Click options and README documentation
+
+_dejavu2_complete() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Basic options from main.py
+    opts="-V --version -T --template -m --model -s --systemprompt -t --temperature -M --max-tokens \
+          -r --reference -k --knowledgebase -Q --knowledgebase-query -S --status -P --print-systemprompt \
+          -a --list-models -A --list-models-details -l --list-template -L --list-template-names \
+          -K --list-knowledge-bases -E --edit-templates -D --edit-defaults -d --edit-models \
+          -p --project-name -o --output-dir -g --message -c --continue -C --conversation \
+          -x --list-conversations -X --delete-conversation -n --new-conversation -i --title \
+          -e --export-conversation -f --export-path -O --stdout -W --list-messages \
+          --remove-message --remove-pair -v --verbose --log-file -q --quiet -h --help"
+    
+    case "${prev}" in
+        -T|--template)
+            # Complete with available agent names (case insensitive keys)
+            if [ -f "Agents.json" ]; then
+                COMPREPLY=( $(compgen -W "$(jq -r 'keys[]' Agents.json 2>/dev/null | cut -d' ' -f1 | tr '[:upper:]' '[:lower:]')" -- ${cur,,}) )
+            else
+                COMPREPLY=( $(compgen -W "dejavu2 leet coder legal medical summarizer editor virgo sarki bio charlesdodgson vazz x_post trans askokusi subeditor text2md diffdiagnosis" -- ${cur,,}) )
+            fi
+            return 0
+            ;;
+        -m|--model)
+            # Complete with available model aliases and names
+            if [ -f "Models.json" ]; then
+                COMPREPLY=( $(compgen -W "$(jq -r '.[] | select(.enabled == 1) | .alias // .model' Models.json 2>/dev/null | sort -u)" -- ${cur}) )
+            else
+                COMPREPLY=( $(compgen -W "sonnet opus gpt4o gpt4 gpt3 o1 o3 gemini claude haiku" -- ${cur}) )
+            fi
+            return 0
+            ;;
+        -k|--knowledgebase)
+            # Complete with available knowledge bases
+            local kbs=""
+            if [ -d "/var/lib/vectordbs" ]; then
+                kbs=$(find /var/lib/vectordbs -name "*.cfg" -exec basename {} .cfg \; 2>/dev/null | sort)
+            fi
+            COMPREPLY=( $(compgen -W "${kbs}" -- ${cur}) )
+            return 0
+            ;;
+        -r|--reference)
+            # Complete with files (supports comma-separated)
+            if [[ "${cur}" == *,* ]]; then
+                # Handle comma-separated list
+                local prefix="${cur%,*},"
+                local suffix="${cur##*,}"
+                COMPREPLY=( $(compgen -f -- "${suffix}") )
+                COMPREPLY=( "${COMPREPLY[@]/#/${prefix}}" )
+            else
+                COMPREPLY=( $(compgen -f -- ${cur}) )
+            fi
+            return 0
+            ;;
+        -C|--conversation|-e|--export-conversation|-X|--delete-conversation|-W|--list-messages)
+            # Complete with conversation IDs if available
+            local conv_dir="$HOME/.config/dejavu2-cli/conversations"
+            if [ -d "${conv_dir}" ]; then
+                COMPREPLY=( $(compgen -W "$(ls ${conv_dir}/*.json 2>/dev/null | xargs -I {} basename {} .json)" -- ${cur}) )
+            fi
+            return 0
+            ;;
+        -o|--output-dir|-f|--export-path)
+            # Complete with directories
+            COMPREPLY=( $(compgen -d -- ${cur}) )
+            return 0
+            ;;
+        --log-file)
+            # Complete with files
+            COMPREPLY=( $(compgen -f -- ${cur}) )
+            return 0
+            ;;
+        -t|--temperature)
+            COMPREPLY=( $(compgen -W "0.0 0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0" -- ${cur}) )
+            return 0
+            ;;
+        -M|--max-tokens)
+            COMPREPLY=( $(compgen -W "1000 2000 4000 8000 16000 32000" -- ${cur}) )
+            return 0
+            ;;
+        -l|--list-template)
+            # Complete with template names or "all"
+            if [ -f "Agents.json" ]; then
+                local templates=$(jq -r 'keys[]' Agents.json 2>/dev/null | cut -d' ' -f1)
+                COMPREPLY=( $(compgen -W "all ${templates}" -- ${cur}) )
+            else
+                COMPREPLY=( $(compgen -W "all" -- ${cur}) )
+            fi
+            return 0
+            ;;
+        -g|--message)
+            # First argument should be role
+            if [[ ${COMP_CWORD} -eq 2 ]] || [[ "${COMP_WORDS[COMP_CWORD-2]}" == "-g" ]] || [[ "${COMP_WORDS[COMP_CWORD-2]}" == "--message" ]]; then
+                COMPREPLY=( $(compgen -W "user assistant system" -- ${cur}) )
+            fi
+            return 0
+            ;;
+        --remove-message|--remove-pair)
+            # First complete with conversation IDs, then with message indices
+            if [[ ${COMP_CWORD} -eq 2 ]] || [[ "${COMP_WORDS[COMP_CWORD-2]}" =~ ^(--remove-message|--remove-pair)$ ]]; then
+                local conv_dir="$HOME/.config/dejavu2-cli/conversations"
+                if [ -d "${conv_dir}" ]; then
+                    COMPREPLY=( $(compgen -W "$(ls ${conv_dir}/*.json 2>/dev/null | xargs -I {} basename {} .json)" -- ${cur}) )
+                fi
+            fi
+            return 0
+            ;;
+    esac
+    
+    # Complete with main options if no specific context
+    if [[ ${cur} == -* ]]; then
+        COMPREPLY=( $(compgen -W "${opts}" -- ${cur}) )
+        return 0
+    fi
+    
+    # Default completion for query text - no completion
+    return 0
+}
+
+# Register completion for all script variants
+complete -F _dejavu2_complete dejavu2
+complete -F _dejavu2_complete dv2
+complete -F _dejavu2_complete dv2c

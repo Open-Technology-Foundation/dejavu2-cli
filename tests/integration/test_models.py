@@ -27,7 +27,11 @@ class TestModelIntegration:
     @require_openai
     def test_openai_query_gpt4o(self):
         """Test a basic query to OpenAI GPT-4o API."""
+        from llm_clients import get_openai_client
+        client = get_openai_client({'OPENAI_API_KEY': os.environ.get('OPENAI_API_KEY')})
+        
         result = query_openai(
+            client=client,
             query="What is the capital of France?",
             system="You are a helpful assistant that provides short answers.",
             model="gpt-4o",
@@ -45,7 +49,11 @@ class TestModelIntegration:
     @require_anthropic
     def test_anthropic_query_sonnet(self):
         """Test a basic query to Anthropic Claude Sonnet API."""
+        from llm_clients import get_anthropic_client
+        client = get_anthropic_client({'ANTHROPIC_API_KEY': os.environ.get('ANTHROPIC_API_KEY')})
+        
         result = query_anthropic(
+            client=client,
             query_text="What is the capital of France?",
             systemprompt="You are a helpful assistant that provides short answers.",
             model="claude-3-5-sonnet-latest",  # Use the latest alias
@@ -73,6 +81,7 @@ class TestModelIntegration:
         
         # Call the function
         result = query_openai(
+            client=mock_client,
             query="What is the capital of France?",
             system="You are a helpful assistant.",
             model="gpt-4o",
@@ -97,6 +106,7 @@ class TestModelIntegration:
         
         # Call the function
         result = query_anthropic(
+            client=mock_client,
             query_text="What is the capital of France?",
             systemprompt="You are a helpful assistant.",
             model="claude-3-5-sonnet",
@@ -111,28 +121,41 @@ class TestModelIntegration:
     @patch('llm_clients.query_anthropic')
     def test_query_router(self, mock_anthropic_query, mock_openai_query):
         """Test that the query router directs to the right provider."""
+        from llm_clients import query
+        
         # Setup mock responses
         mock_openai_query.return_value = "OpenAI response: Paris"
         mock_anthropic_query.return_value = "Anthropic response: Paris"
         
+        mock_clients = {
+            'openai': MagicMock(),
+            'anthropic': MagicMock()
+        }
+        
         # Test routing to OpenAI
         openai_result = query(
-            provider="openai",
-            query="What is the capital of France?",
-            system="You are a helpful assistant.",
+            clients=mock_clients,
+            query_text="What is the capital of France?",
+            systemprompt="You are a helpful assistant.",
+            messages=[],
             model="gpt-4o",
             temperature=0.1,
-            max_tokens=100
+            max_tokens=100,
+            model_parameters={'family': 'openai', 'model': 'gpt-4o'},
+            api_keys={'OPENAI_API_KEY': 'test-key'}
         )
         
-        # Test routing to Anthropic
+        # Test routing to Anthropic  
         anthropic_result = query(
-            provider="anthropic",
-            query="What is the capital of France?",
-            system="You are a helpful assistant.",
+            clients=mock_clients,
+            query_text="What is the capital of France?",
+            systemprompt="You are a helpful assistant.",
+            messages=[],
             model="claude-3-5-sonnet",
             temperature=0.1,
-            max_tokens=100
+            max_tokens=100,
+            model_parameters={'family': 'anthropic', 'model': 'claude-3-5-sonnet'},
+            api_keys={'ANTHROPIC_API_KEY': 'test-key'}
         )
         
         # Verify correct routing

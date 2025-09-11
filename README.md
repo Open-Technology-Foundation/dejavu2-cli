@@ -31,7 +31,7 @@ A powerful command-line interface for interacting with various Large Language Mo
 - **Unified Interface**: Single CLI for all LLM providers with consistent parameter handling
 - **Conversation Management**: Maintain context across sessions with persistent conversation history
 - **Agent Templates**: Pre-configured AI personas with specialized capabilities
-- **Context Enhancement**: Include reference files and knowledge bases in queries
+- **Context Enhancement**: Include reference files and knowledgebases in queries
 - **Security-First Design**: Built-in input validation and secure subprocess execution
 
 ### Advanced Features
@@ -92,7 +92,7 @@ dv2 "Explain quantum computing in simple terms"
 dv2 "Write a haiku about coding" -m gpt4o
 
 # Use an agent template for specialized tasks
-dv2 "Debug this Python code: print(1/0)" -T "Leet - Full-Stack Programmer"
+dv2 "Debug this Python code: print(1/0)" -T leet
 
 # Continue a conversation
 dv2 "What are its practical applications?" -c
@@ -114,7 +114,7 @@ Core Modules:
 ├── conversations.py     # Conversation history management
 ├── models.py           # Model registry and selection
 ├── templates.py        # Agent template management
-├── context.py          # Reference files and knowledge bases
+├── context.py          # Reference files and knowledgebases
 ├── config.py           # Configuration loading and management
 ├── security.py         # Input validation and secure execution
 ├── errors.py           # Custom exception hierarchy
@@ -181,8 +181,8 @@ dv2 [QUERY] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-r, --reference FILES` | Include reference files (comma-separated) |
-| `-k, --knowledgebase NAME` | Use a knowledge base for context |
-| `-Q, --knowledgebase-query` | Custom query for knowledge base |
+| `-k, --knowledgebase NAME` | Use a knowledgebase for context |
+| `-Q, --knowledgebase-query` | Custom query for knowledgebase |
 
 ### Information and Configuration
 
@@ -191,7 +191,7 @@ dv2 [QUERY] [OPTIONS]
 | `-S, --status` | Display current configuration |
 | `-a, --list-models` | List available models |
 | `-l, --list-template NAME` | Show template details |
-| `-K, --list-knowledge-bases` | List available knowledge bases |
+| `-K, --list-knowledge-bases` | List available knowledgebases |
 | `-E, --edit-templates` | Edit Agents.json |
 | `-D, --edit-defaults` | Edit defaults.yaml |
 
@@ -313,14 +313,16 @@ Each agent defines:
 Agents are selected via the `-T` option:
 ```bash
 # Use the Leet programmer for code review
-dv2 "Review this Python function for security issues" -T "Leet" -r code.py
+dv2 "Review this Python function for security issues" -T leet -r code.py
 
 # Use the Legal specialist
 dv2 "Explain this contract clause" -T "Legal - Law and Regulations"
 
 # Use the Editor for improving text
-dv2 "Improve this paragraph" -T "Editor - Text Improvement"
+dv2 "Improve this paragraph" -T Editor
 ```
+
+**Note:** when specifying an agent with the -T|--template option, only the Agent key is required. It is non-case sensitive. To get a list of Agent template keys:  `jq -r 'keys[]' Agents.json | cut -d' ' -f1`
 
 ## Configuration
 
@@ -378,7 +380,7 @@ dv2 "Explain TCP/IP networking" -m opus -t 0.1
 dv2 "Review this code for bugs" -r main.py,utils.py
 
 # Summarize documents
-dv2 "Summarize these reports" -r report1.pdf,report2.docx -T "Summary"
+dv2 "Summarize these reports" -r report1.pdf,report2.docx -T Summary
 
 # Compare files
 dv2 "What are the differences between these configs?" -r old.yaml,new.yaml
@@ -402,55 +404,59 @@ dv2 -W 550e8400-e29b-41d4-a716-446655440000
 
 ### Using Agent Templates
 ```bash
+# Note: when specifying an agent with the -T|--template option, only the 
+# Agent key is required. It is non-case sensitive.
+# To get a list of Agent template keys:  jq -r 'keys[]' Agents.json | cut -d' ' -f1
+
 # Use the Dejavu2 general assistant
-dv2 "Help me understand this concept" -T Dejavu2
+dv2 "Help me understand this concept" -T dejavu2
 
 # Use specialized agents for domain tasks
-dv2 "Get business advice for Indonesia" -T askOkusi
-dv2 "Find bugs in this code" -T Leet -r app.js
-dv2 "Diagnose these symptoms" -T DiffDiagnosis
+dv2 "Get business advice for Indonesia" -T askokusi
+dv2 "Find bugs in this code" -T leet -r app.js
+dv2 "Diagnose these symptoms" -T diffdiagnosis
 
 # Content processing agents
-dv2 "Improve this text" -T SubEditor -r draft.txt
-dv2 "Summarize this report" -T Summariser -r report.pdf
-dv2 "Convert to markdown" -T Text2md -r document.txt
+dv2 "Improve this text" -T subeditor -r draft.txt
+dv2 "Summarize this report" -T summariser -r report.pdf
+dv2 "Convert to markdown" -T text2md -r document.txt
 
 # Creative and specialized agents
-dv2 "Create a short video idea" -T Vazz
-dv2 "Interview me about my life" -T Bio
-dv2 "Write a children's story" -T CharlesDodgson
-dv2 "Create a Twitter post" -T X_Post
+dv2 "Create a short video idea" -T vazz
+dv2 "Interview me about my life" -T bio
+dv2 "Write a children's story" -T charlesdodgson
+dv2 "Create a Twitter post" -T x_post
 
 # Other useful agents
 dv2 "Get factual answers" -T Virgo
-dv2 "Translate this text" -T TRANS -r document.txt
+dv2 "Translate this text" -T trans -r document.txt
 dv2 "Ask with humor" -T Sarki
 
 # Combine agents with specific parameters
 dv2 "Debug this Python code" -T Leet -m opus -t 0.2 -r buggy_code.py
 ```
 
-### Knowledge Base Integration
+### Knowledgebase Integration
 
 The `customkb` integration allows you to query vector databases for enhanced context:
 
 ```bash
-# Basic knowledge base query
+# Basic knowledgebase query
 dv2 "What is our coding standard?" -k "engineering_docs"
 
-# Specify custom query for the knowledge base
+# Specify custom query for the knowledgebase
 dv2 "Explain the deployment process" -k "devops_kb" -Q "kubernetes deployment procedures"
 
-# Combine knowledge base with agent templates
-dv2 "Review this code against our standards" -T "Leet" -k "coding_standards" -r new_feature.py
+# Combine knowledgebase with agent templates
+dv2 "Review this code against our standards" -T leet -k "coding_standards" -r new_feature.py
 
 # Multiple context sources
 dv2 "Is this compliant with our policies?" -k "company_policies" -r proposal.pdf
 ```
 
-**Available Knowledge Bases**:
-- List all available knowledge bases: `dv2 -K`
-- Knowledge bases are stored in `/var/lib/vectordbs/`
+**Available Knowledgebases**:
+- List all available knowledgebases: `dv2 -K`
+- Knowledgebases are stored in `/var/lib/vectordbs/`
 - Each KB has a configuration file defining its content and indexing
 
 ### Advanced Usage
@@ -459,10 +465,10 @@ dv2 "Is this compliant with our policies?" -k "company_policies" -r proposal.pdf
 dv2 "Analyze this data" -r data.csv | dv2 "Create a summary report" -c
 
 # Complex multi-context query
-dv2 "Review architecture" -T "DevOps" -k "best_practices" -r architecture.md -m opus
+dv2 "Review architecture" -T DevOps -k "best_practices" -r architecture.md -m opus
 
 # Export formatted conversation
-dv2 "Let's design a system" -T "Architect" -c | dv2 -e current -O > design_discussion.md
+dv2 "Let's design a system" -T Architect -c | dv2 -e current -O > design_discussion.md
 ```
 
 ## Development

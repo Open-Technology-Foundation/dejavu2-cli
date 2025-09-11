@@ -15,7 +15,7 @@ The **dv2-models-list** utility is a specialized tool within the Models director
   - Eliminates need for multiple provider-specific tools
   - Maintains conversation context across sessions
   - Simplifies model switching and parameter tuning
-  - Enables integration with knowledge bases and reference files
+  - Enables integration with knowledgebases and reference files
 
 ### dv2-models-list
 - **Primary Goal**: Advanced model registry management and querying
@@ -50,7 +50,7 @@ The **dv2-models-list** utility is a specialized tool within the Models director
 
 4. **Context Enhancement**
    - Include reference files in queries
-   - Integration with customKB knowledge bases
+   - Integration with customKB knowledgebases
    - Maintain system prompts across conversations
 
 5. **Model Management**

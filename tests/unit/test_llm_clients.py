@@ -20,8 +20,12 @@ from llm_clients import (
     query_gemini, 
     query_llama,
     query,
-    _query_openai_responses,
-    _query_openai_chat_completions
+    format_messages_for_responses_api,
+    _extract_content_from_response,
+    _is_reasoning_model,
+    _supports_web_search,
+    _supports_vision,
+    _supports_image_generation
 )
 
 class TestLLMClients:
@@ -83,19 +87,26 @@ class TestOpenAIProvider:
     """Test OpenAI family LLMs (GPT-4, ChatGPT, O-series)."""
     
     @patch('llm_clients.OpenAI')
-    def test_query_openai_chat_completions(self, mock_openai_class):
-        """Test OpenAI Chat Completions API (fallback)."""
+    def test_query_openai_responses_api(self, mock_openai_class):
+        """Test OpenAI Responses API."""
         # Setup mock client
         mock_client = MagicMock()
         mock_openai_class.return_value = mock_client
         
-        # Setup mock response
+        # Setup mock response with proper Responses API format
         mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "Test response from GPT-4"
-        mock_client.chat.completions.create.return_value = mock_response
+        mock_response.model_dump.return_value = {
+            "output": [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": "Test response from GPT-4"
+                }]
+            }]
+        }
+        mock_client.responses.create.return_value = mock_response
         
-        # Test with use_responses_api=False to force Chat Completions
+        # Test with Responses API
         result = query_openai(
             client=mock_client,
             query="Test query",
@@ -103,104 +114,87 @@ class TestOpenAIProvider:
             model="gpt-4o",
             temperature=0.7,
             max_tokens=1000,
-            conversation_messages=[],
-            use_responses_api=False
+            conversation_messages=[]
         )
         
         assert result == "Test response from GPT-4"
-        mock_client.chat.completions.create.assert_called_once()
-        
-        # Verify correct parameters were passed
-        call_args = mock_client.chat.completions.create.call_args
-        assert call_args[1]['model'] == 'gpt-4o'
-        assert call_args[1]['temperature'] == 0.7
-        assert 'max_completion_tokens' in call_args[1]
-    
-    @patch('llm_clients.OpenAI')  
-    def test_query_openai_responses_api_fallback(self, mock_openai_class):
-        """Test OpenAI Responses API with fallback to Chat Completions."""
-        # Setup mock client without responses attribute (fallback scenario)
-        mock_client = MagicMock()
-        mock_openai_class.return_value = mock_client
-        del mock_client.responses  # Remove responses attribute to trigger fallback
-        
-        # Setup Chat Completions response
-        mock_response = MagicMock()
-        mock_response.choices = [MagicMock()]
-        mock_response.choices[0].message.content = "Fallback response"
-        mock_client.chat.completions.create.return_value = mock_response
-        
-        # Test with use_responses_api=True (default)
-        result = query_openai(
-            client=mock_client,
-            query="Test query",
-            system="You are helpful", 
-            model="gpt-4o",
-            temperature=0.7,
-            max_tokens=1000
-        )
-        
-        assert result == "Fallback response"
-        # Should fall back to chat completions
-        mock_client.chat.completions.create.assert_called_once()
-
-    @patch('llm_clients.OpenAI')
-    def test_query_openai_responses_api_success(self, mock_openai_class):
-        """Test OpenAI Responses API success path."""
-        # Setup mock client with responses attribute
-        mock_client = MagicMock()
-        mock_openai_class.return_value = mock_client
-        
-        # Setup Responses API response
-        mock_response = MagicMock()
-        mock_response.output = "Response from Responses API"
-        mock_client.responses.create.return_value = mock_response
-        
-        result = query_openai(
-            client=mock_client,
-            query="Test query",
-            system="You are helpful",
-            model="gpt-4o", 
-            temperature=0.7,
-            max_tokens=1000,
-            use_responses_api=True
-        )
-        
-        assert result == "Response from Responses API"
         mock_client.responses.create.assert_called_once()
         
-        # Verify Responses API parameters
+        # Verify correct parameters were passed
         call_args = mock_client.responses.create.call_args
         assert call_args[1]['model'] == 'gpt-4o'
-        assert call_args[1]['temperature'] == 0.7
         assert call_args[1]['max_output_tokens'] == 1000
+        assert 'input' in call_args[1]
+    
+    def test_format_messages_for_responses_api(self):
+        """Test message formatting for Responses API."""
+        messages = [
+            {"role": "system", "content": "You are helpful"},
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there!"},
+            {"role": "user", "content": "How are you?"}
+        ]
+        
+        formatted = format_messages_for_responses_api(messages)
+        
+        # Check system -> developer mapping
+        assert formatted[0]["role"] == "developer"
+        assert formatted[0]["content"][0]["type"] == "input_text"
+        assert formatted[0]["content"][0]["text"] == "You are helpful"
+        
+        # Check user messages
+        assert formatted[1]["role"] == "user"
+        assert formatted[1]["content"][0]["type"] == "input_text"
+        
+        # Check assistant messages use output_text
+        assert formatted[2]["role"] == "assistant"
+        assert formatted[2]["content"][0]["type"] == "output_text"
 
-    def test_openai_o_series_models(self):
-        """Test special handling for O-series models (O1, O3, O4)."""
-        with patch('llm_clients.OpenAI') as mock_openai_class:
-            mock_client = MagicMock()
-            mock_openai_class.return_value = mock_client
-            
-            mock_response = MagicMock()
-            mock_response.choices = [MagicMock()]
-            mock_response.choices[0].message.content = "O-series response"
-            mock_client.chat.completions.create.return_value = mock_response
-            
-            # Test O1 model - should set temperature to 1
-            result = query_openai(
-                client=mock_client,
-                query="Test query",
-                system="You are helpful",
-                model="o1-preview",
-                temperature=0.7,  # Should be overridden to 1
-                max_tokens=1000,
-                use_responses_api=False
-            )
-            
-            assert result == "O-series response"
-            # Check that temperature was set to 1 for O-series models
-            call_args = mock_client.chat.completions.create.call_args
-            # Note: O-series handling is done in the routing layer, not in query_openai directly
+    def test_extract_content_from_response(self):
+        """Test content extraction from Responses API response."""
+        # Test proper Responses API format
+        response_data = {
+            "output": [{
+                "type": "message",
+                "content": [{
+                    "type": "output_text",
+                    "text": "Extracted text"
+                }]
+            }]
+        }
+        
+        content = _extract_content_from_response(response_data)
+        assert content == "Extracted text"
+        
+        # Test empty response
+        assert _extract_content_from_response({}) == ""
+        assert _extract_content_from_response(None) == ""
+
+    def test_model_capability_detection(self):
+        """Test model capability detection functions."""
+        # Test reasoning model detection
+        assert _is_reasoning_model("gpt-5") == True
+        assert _is_reasoning_model("o1") == True
+        assert _is_reasoning_model("o3-mini") == True
+        assert _is_reasoning_model("o4-mini") == True
+        assert _is_reasoning_model("gpt-5-chat-latest") == False
+        assert _is_reasoning_model("gpt-4o") == False
+        
+        # Test web search support
+        assert _supports_web_search("gpt-5") == True
+        assert _supports_web_search("o1") == True
+        assert _supports_web_search("gpt-5-chat-latest") == False
+        
+        # Test vision support
+        assert _supports_vision("gpt-5") == True
+        assert _supports_vision("gpt-4o") == True
+        assert _supports_vision("o4") == True
+        assert _supports_vision("gpt-4.1-nano") == False
+        
+        # Test image generation support
+        assert _supports_image_generation("gpt-5") == True
+        assert _supports_image_generation("o3") == True
+        assert _supports_image_generation("gpt-5-nano") == False
 
 class TestAnthropicProvider:
     """Test Anthropic family LLMs (Claude models)."""
@@ -410,9 +404,9 @@ class TestLLMRouting:
             
             assert result == "OpenAI response"
             mock_query_openai.assert_called_once()
-            # Verify Responses API is enabled by default
+            # Verify query_openai is called with correct args (no use_responses_api param)
             call_args = mock_query_openai.call_args
-            assert call_args[1]['use_responses_api'] == True
+            assert 'use_responses_api' not in call_args[1]
 
     def test_query_routing_anthropic_family(self):
         """Test query routing for Anthropic family models."""
@@ -495,9 +489,9 @@ class TestErrorHandling:
             mock_client = MagicMock()
             mock_openai_class.return_value = mock_client
             
-            # Simulate authentication error
+            # Simulate authentication error on Responses API
             from errors import AuthenticationError
-            mock_client.chat.completions.create.side_effect = Exception("invalid_api_key")
+            mock_client.responses.create.side_effect = Exception("invalid_api_key")
             
             with pytest.raises(AuthenticationError):
                 query_openai(
@@ -506,8 +500,7 @@ class TestErrorHandling:
                     system="Test",
                     model="gpt-4o",
                     temperature=0.7,
-                    max_tokens=100,
-                    use_responses_api=False
+                    max_tokens=100
                 )
 
     def test_anthropic_rate_limit_error(self):

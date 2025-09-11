@@ -1,12 +1,12 @@
 """
-Tests for knowledge base integration in dejavu2-cli.
+Tests for knowledgebase integration in dejavu2-cli.
 """
 import os
 import pytest
 import subprocess
 from unittest.mock import patch, MagicMock
 
-# Import the knowledge base function from context.py
+# Import the knowledgebase function from context.py
 import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from context import get_knowledgebase_string
@@ -14,11 +14,11 @@ from context import get_knowledgebase_string
 # Skip if knowledgebase path is not configured or customkb not installed
 kb_available = pytest.mark.skipif(
     not os.path.exists(os.path.join(os.environ.get('VECTORDBS', '/var/lib/vectordbs'), 'okusi/okusiassociates.cfg')), 
-    reason="okusiassociates.cfg knowledge base not available"
+    reason="okusiassociates.cfg knowledgebase not available"
 )
 
 class TestKnowledgeBase:
-    """Test interactions with knowledge bases."""
+    """Test interactions with knowledgebases."""
     
     @kb_available
     def test_kb_query(self):
@@ -37,7 +37,7 @@ class TestKnowledgeBase:
     
     @patch('subprocess.run')
     def test_kb_query_mocked(self, mock_run):
-        """Test knowledge base query with a mocked subprocess call."""
+        """Test knowledgebase query with a mocked subprocess call."""
         # Set up mock response
         mock_process = MagicMock()
         mock_process.stdout = "Okusi Associates offers software development and consulting services."
@@ -47,7 +47,10 @@ class TestKnowledgeBase:
         # Call the function
         result = get_knowledgebase_string(
             knowledgebase="okusiassociates",
-            knowledgebase_query="What services does the company offer?"
+            knowledgebase_query="What services does the company offer?",
+            customkb_executable="customkb",
+            vectordbs_path="/var/lib/vectordbs",
+            api_keys={'ANTHROPIC_API_KEY': 'test-key'}
         )
         
         # Verify the result

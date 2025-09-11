@@ -1,0 +1,130 @@
+#!/bin/bash
+
+# Bash completion for dv2-models-list and dv2-models-update scripts
+
+_dv2_models_list() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Main options for dv2-models-list
+    opts="-F --filter -O --or -N --not -C --case-sensitive -P --preset
+          -a --alias -p --parent -c --model-category -f --family -v --available -e --enabled
+          -o --format -col --columns -H --no-header -g --group
+          -s --sort -r --reverse -l --limit
+          -S --stats -b --count-by -u --unique
+          -m --models-file -d --include-disabled"
+
+    # Context-specific completions
+    case "$prev" in
+        -P|--preset)
+            # Known presets from the codebase
+            COMPREPLY=($(compgen -W "llm vision enabled available anthropic openai google" -- "$cur"))
+            return 0
+            ;;
+        -o|--format)
+            COMPREPLY=($(compgen -W "default table json csv yaml tree" -- "$cur"))
+            return 0
+            ;;
+        -col|--columns)
+            # Common model fields
+            COMPREPLY=($(compgen -W "model alias parent family model_category enabled available vision context_window max_output_tokens token_costs description" -- "$cur"))
+            return 0
+            ;;
+        -g|--group)
+            # Fields suitable for grouping
+            COMPREPLY=($(compgen -W "parent family model_category series" -- "$cur"))
+            return 0
+            ;;
+        -s|--sort)
+            # Fields suitable for sorting
+            COMPREPLY=($(compgen -W "model alias parent family model_category enabled available context_window max_output_tokens" -- "$cur"))
+            return 0
+            ;;
+        -b|--count-by|-u|--unique)
+            # Fields suitable for statistics
+            COMPREPLY=($(compgen -W "parent family model_category series enabled available vision" -- "$cur"))
+            return 0
+            ;;
+        -p|--parent)
+            # Known providers
+            COMPREPLY=($(compgen -W "OpenAI Anthropic Google Meta xAI Mistral Cohere Ollama" -- "$cur"))
+            return 0
+            ;;
+        -c|--model-category)
+            # Model categories
+            COMPREPLY=($(compgen -W "LLM image embed tts stt moderation" -- "$cur"))
+            return 0
+            ;;
+        -f|--family)
+            # Common model families
+            COMPREPLY=($(compgen -W "gpt4 claude3 gemini llama mistral" -- "$cur"))
+            return 0
+            ;;
+        -m|--models-file)
+            # File completion
+            COMPREPLY=($(compgen -f -- "$cur"))
+            return 0
+            ;;
+        -l|--limit|-v|--available|-e|--enabled)
+            # Numeric values
+            COMPREPLY=($(compgen -W "1 2 3 4 5 9 10 50 100" -- "$cur"))
+            return 0
+            ;;
+        -F|--filter)
+            # Filter expressions
+            local filter_fields="model alias parent family model_category enabled available vision context_window max_output_tokens"
+            local filter_ops="equals not_equals contains not_contains starts_with ends_with regex > < >= <= in not_in"
+            
+            if [[ "$cur" == *:*:* ]]; then
+                # Already has field:op:, no completion
+                return 0
+            elif [[ "$cur" == *:* ]]; then
+                # Has field:, complete operators
+                COMPREPLY=($(compgen -W "$filter_ops" -- "${cur##*:}"))
+                COMPREPLY=("${COMPREPLY[@]/#/${cur%:*}:}")
+            else
+                # Complete field names
+                COMPREPLY=($(compgen -W "$filter_fields" -- "$cur"))
+                COMPREPLY=("${COMPREPLY[@]/%/:}")
+            fi
+            return 0
+            ;;
+    esac
+
+    # Default completion
+    COMPREPLY=($(compgen -W "$opts" -- "$cur"))
+}
+
+_dv2_models_update() {
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    # Main options for dv2-models-update
+    opts="-p --provider -a --all -l --list-providers
+          -n --dry-run -f --force -v --verbose -m --model"
+
+    # Context-specific completions
+    case "$prev" in
+        -p|--provider)
+            # Available providers
+            COMPREPLY=($(compgen -W "anthropic openai google mistral cohere ollama" -- "$cur"))
+            return 0
+            ;;
+        -m|--model)
+            # Claude models for searches
+            COMPREPLY=($(compgen -W "sonnet opus none" -- "$cur"))
+            return 0
+            ;;
+    esac
+
+    # Default completion
+    COMPREPLY=($(compgen -W "$opts" -- "$cur"))
+}
+
+# Register completions
+complete -F _dv2_models_list dv2-models-list
+complete -F _dv2_models_update dv2-models-update

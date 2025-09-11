@@ -124,16 +124,18 @@ def initialize_clients(api_keys: Dict[str, str]) -> Dict[str, Any]:
     
     # Remote Ollama client initialization
     try:
-        if api_keys.get('OLLAMA_API_KEY'):
-            # The URL format depends on the implementation - we need compatibility with okusi.id API
-            remote_url = 'https://ai.okusi.id/api'
+        if api_keys.get('OLLAMA_API_KEY') and os.environ.get('OLLAMA_REMOTE_URL'):
+            # Only use remote URL if explicitly configured via environment variable
+            remote_url = os.environ.get('OLLAMA_REMOTE_URL')
+            # Warn user about remote endpoint usage
+            logging.warning(f"Using remote Ollama endpoint: {remote_url}")
             # Ensure we have the /v1/chat/completions endpoint
             if not remote_url.endswith('/v1'):
                 remote_url = f"{remote_url}/v1"
                 
             clients['ollama'] = OpenAI(
                 base_url=remote_url,
-                api_key=api_keys.get('OLLAMA_API_KEY', 'llama')
+                api_key=api_keys.get('OLLAMA_API_KEY')  # Require explicit API key
             )
         else:
             clients['ollama'] = clients['ollama_local']  # Fallback to local
@@ -233,6 +235,171 @@ def query_anthropic(
         # Re-raise as APIError with context
         raise APIError(f"Anthropic API error for {model}: {e}")
 
+# OpenAI model capability detection functions
+def _is_reasoning_model(model: str) -> bool:
+    """
+    Check if a model supports reasoning parameter.
+    
+    Args:
+        model: Model name (may include date suffix)
+        
+    Returns:
+        True if model supports reasoning
+    """
+    model_lower = model.lower()
+    
+    # gpt-5-chat-latest doesn't support reasoning
+    if "gpt-5-chat" in model_lower:
+        return False
+        
+    # Check if model starts with reasoning-capable prefixes
+    reasoning_prefixes = ("gpt-5", "o1", "o3", "o4")
+    return any(model_lower.startswith(prefix) for prefix in reasoning_prefixes)
+
+def _supports_web_search(model: str) -> bool:
+    """
+    Check if a model supports web search.
+    
+    Args:
+        model: Model name (may include date suffix)
+        
+    Returns:
+        True if model supports web search
+    """
+    model_lower = model.lower()
+    
+    # gpt-5-chat does NOT support web search
+    if "gpt-5-chat" in model_lower:
+        return False
+        
+    # Models that support web search
+    web_search_prefixes = ("gpt-5", "o1", "o3", "o4")
+    return any(model_lower.startswith(prefix) for prefix in web_search_prefixes)
+
+def _supports_vision(model: str) -> bool:
+    """
+    Check if a model supports vision input (images).
+    
+    Args:
+        model: Model name (may include date suffix)
+        
+    Returns:
+        True if model supports vision
+    """
+    model_lower = model.lower()
+    
+    # Models that support vision
+    vision_prefixes = ("gpt-5", "gpt-4.1", "gpt-4o", "o4")
+    
+    # Check for specific models that don't support vision
+    no_vision_models = ("gpt-4.1-nano", "codex")
+    if any(no_vis in model_lower for no_vis in no_vision_models):
+        return False
+        
+    return any(model_lower.startswith(prefix) for prefix in vision_prefixes)
+
+def _supports_image_generation(model: str) -> bool:
+    """
+    Check if a model supports image generation tool.
+    
+    Args:
+        model: Model name (may include date suffix)
+        
+    Returns:
+        True if model supports image generation
+    """
+    model_lower = model.lower()
+    
+    # Models that support image generation
+    image_gen_prefixes = ("gpt-5", "gpt-4.1", "gpt-4o", "o3", "o4")
+    
+    # Exclude certain models
+    if "nano" in model_lower or "codex" in model_lower:
+        return False
+        
+    return any(model_lower.startswith(prefix) for prefix in image_gen_prefixes)
+
+def format_messages_for_responses_api(messages: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """
+    Format messages for the Responses API input format.
+    
+    Args:
+        messages: List of message objects with 'role' and 'content'
+        
+    Returns:
+        Formatted input array for Responses API
+    """
+    formatted_messages = []
+    
+    for message in messages:
+        role = message["role"]
+        content = message["content"]
+        
+        # Map roles (system becomes developer in Responses API)
+        if role == "system":
+            role = "developer"
+        elif role not in ["user", "assistant", "developer"]:
+            role = "user"
+        
+        # Determine content type based on role
+        # Assistant messages use output_text, others use input_text
+        text_type = "output_text" if role == "assistant" else "input_text"
+        
+        # Handle different content types
+        if isinstance(content, list):
+            # Already structured content
+            content_items = []
+            for block in content:
+                if block.get("type") == "text":
+                    content_items.append({
+                        "type": text_type,
+                        "text": block["text"]
+                    })
+                # Handle images if present (not implemented in current dv2)
+            formatted_messages.append({
+                "role": role,
+                "content": content_items
+            })
+        else:
+            # Simple text content
+            formatted_messages.append({
+                "role": role,
+                "content": [{
+                    "type": text_type,
+                    "text": content
+                }]
+            })
+    
+    return formatted_messages
+
+def _extract_content_from_response(data: Dict[str, Any]) -> str:
+    """
+    Extract message content from Responses API response.
+    
+    Args:
+        data: Response data from API
+        
+    Returns:
+        Extracted text content or empty string
+    """
+    if not data:
+        return ""
+        
+    # Try Responses API format
+    if "output" in data and isinstance(data["output"], list):
+        for output_item in data["output"]:
+            if output_item.get("type") == "message":
+                content_list = output_item.get("content", [])
+                if isinstance(content_list, list):
+                    for content_item in content_list:
+                        if isinstance(content_item, dict):
+                            if content_item.get("type") == "output_text":
+                                return content_item.get("text", "")
+                            elif "text" in content_item:
+                                return content_item["text"]
+    
+    return ""
+
 def query_openai(
     client: OpenAI,
     query: str,
@@ -240,11 +407,10 @@ def query_openai(
     model: str,
     temperature: float,
     max_tokens: int,
-    conversation_messages: List[Dict[str, str]] = None,
-    use_responses_api: bool = True
+    conversation_messages: List[Dict[str, str]] = None
 ) -> str:
     """
-    Send a query to the OpenAI API using Responses API with Chat Completions fallback.
+    Send a query to the OpenAI API using the Responses API.
     
     Args:
         client: OpenAI client object
@@ -254,7 +420,6 @@ def query_openai(
         temperature: Sampling temperature (higher = more random)
         max_tokens: Maximum number of tokens in the response
         conversation_messages: Optional list of previous messages from conversation history
-        use_responses_api: Whether to use the new Responses API (default: True)
         
     Returns:
         The model's response as a string
@@ -268,20 +433,71 @@ def query_openai(
         if client is None:
             raise ValueError("OpenAI client initialization failed. Check API key validity.")
         
-        # Use Responses API by default for future-proofing
-        if use_responses_api:
-            return _query_openai_responses(
-                client, query, system, model, temperature, max_tokens, conversation_messages
-            )
+        # Prepare messages list
+        messages = [{"role": "system", "content": system}]
         
-        # Fallback to Chat Completions API if explicitly requested
-        return _query_openai_chat_completions(
-            client, query, system, model, temperature, max_tokens, conversation_messages
-        )
+        # Add conversation history if available
+        if conversation_messages:
+            messages.extend(conversation_messages)
+        
+        # Add current query
+        messages.append({"role": "user", "content": query})
+        
+        # Format messages for Responses API
+        formatted_input = format_messages_for_responses_api(messages)
+        
+        # Build payload for Responses API
+        payload = {
+            "model": model,
+            "input": formatted_input
+        }
+        
+        # Check model capabilities
+        model_lower = model.lower()
+        is_reasoning_model = _is_reasoning_model(model)
+        
+        # Configure based on model type
+        if is_reasoning_model:
+            # Reasoning models configuration
+            if model_lower.startswith("o4"):
+                payload["reasoning"] = {"effort": "medium"}
+                payload["text"] = {"verbosity": "medium"}
+            else:
+                payload["reasoning"] = {"effort": "minimal"}
+                payload["text"] = {"verbosity": "low"}
+        else:
+            # Non-reasoning models
+            payload["text"] = {"verbosity": "medium"}
+            # Temperature supported for non-reasoning models without tools
+            if not model_lower.startswith("codex"):
+                payload["temperature"] = temperature
+        
+        # Add max tokens
+        if max_tokens:
+            payload["max_output_tokens"] = max_tokens
+        
+        # Make the API call using the Responses endpoint
+        response = client.responses.create(**payload)
+        
+        # Extract content from response
+        content = _extract_content_from_response(response.model_dump() if hasattr(response, 'model_dump') else dict(response))
+        
+        if not content:
+            # Try to extract error or fallback to string representation
+            if hasattr(response, 'output'):
+                content = response.output
+            elif hasattr(response, 'content'):
+                content = response.content
+            elif hasattr(response, 'text'):
+                content = response.text
+            else:
+                content = str(response)
+        
+        return content
+        
     except Exception as e:
         logger.error(f"Error querying {model}: {e}")
         # Check for specific OpenAI exceptions
-        error_type = type(e).__name__
         if hasattr(e, 'status_code'):
             if e.status_code == 401:
                 raise AuthenticationError(f"Invalid OpenAI API key for {model}")
@@ -300,125 +516,6 @@ def query_openai(
         # Re-raise as APIError with context
         raise APIError(f"OpenAI API error for {model}: {e}")
 
-def _query_openai_chat_completions(
-    client: OpenAI,
-    query: str,
-    system: str,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    conversation_messages: List[Dict[str, str]] = None
-) -> str:
-    """
-    Internal function to handle Chat Completions API requests.
-    """
-    # Create base messages list with system prompt
-    messages = [{"role": "system", "content": system}]
-    
-    # Add conversation history if available
-    if conversation_messages:
-        for msg in conversation_messages:
-            # Skip system messages as we already added our system prompt
-            if msg["role"] != "system":
-                messages.append(msg)
-    
-    # Add current query as the final message
-    messages.append({"role": "user", "content": query})
-    
-    try:
-        # First try with max_completion_tokens for all OpenAI models
-        response = client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            max_completion_tokens=max_tokens,
-        )
-    except Exception as oe:
-        # If max_completion_tokens fails, fall back to max_tokens
-        if "max_completion_tokens" in str(oe):
-            logger.warning(f"Error with max_completion_tokens for {model}, trying with max_tokens: {oe}")
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                n=1, stop=''
-            )
-        # If that fails too, try without parameter constraints
-        elif "max_tokens" in str(oe):
-            logger.warning(f"Error with max_tokens for {model}, trying without token limit: {oe}")
-            response = client.chat.completions.create(
-                model=model,
-                messages=messages,
-                temperature=temperature,
-            )
-        else:
-            # Re-raise if it's not a token parameter issue
-            raise
-    return response.choices[0].message.content
-
-def _query_openai_responses(
-    client: OpenAI,
-    query: str,
-    system: str,
-    model: str,
-    temperature: float,
-    max_tokens: int,
-    conversation_messages: List[Dict[str, str]] = None
-) -> str:
-    """
-    Internal function to handle Responses API requests (future-proofing).
-    
-    The Responses API provides stateful conversation management and built-in tools.
-    This implementation handles both new conversations and continuing existing ones.
-    """
-    try:
-        # Check if client has responses attribute (Responses API support)
-        if not hasattr(client, 'responses'):
-            logger.warning(f"Responses API not available, falling back to Chat Completions for {model}")
-            return _query_openai_chat_completions(
-                client, query, system, model, temperature, max_tokens, conversation_messages
-            )
-        
-        # Prepare the input for Responses API
-        # The Responses API uses a simpler input format
-        full_input = f"{system}\n\n{query}"
-        
-        # Add conversation history to input if available
-        if conversation_messages:
-            history_text = "\n".join([
-                f"{msg['role'].title()}: {msg['content']}"
-                for msg in conversation_messages
-                if msg['role'] != 'system'
-            ])
-            full_input = f"{system}\n\nConversation History:\n{history_text}\n\nCurrent Query: {query}"
-        
-        # Create request using Responses API
-        response = client.responses.create(
-            model=model,
-            input=full_input,
-            # Note: Responses API may have different parameter names
-            max_output_tokens=max_tokens,
-            temperature=temperature,
-        )
-        
-        # Extract response content
-        if hasattr(response, 'output'):
-            return response.output
-        elif hasattr(response, 'content'):
-            return response.content
-        elif hasattr(response, 'text'):
-            return response.text
-        else:
-            # Fallback: convert to string
-            return str(response)
-            
-    except Exception as re:
-        # If Responses API fails, log and fallback to Chat Completions
-        logger.warning(f"Responses API failed for {model}, falling back to Chat Completions: {re}")
-        return _query_openai_chat_completions(
-            client, query, system, model, temperature, max_tokens, conversation_messages
-        )
 
 def prepare_llama_messages(query_text: str, systemprompt: str, conversation_messages: List[Dict[str, str]] = None) -> List[Dict[str, str]]:
   """
@@ -486,7 +583,7 @@ def prepare_llama_request(client: OpenAI, model: str, messages: List[Dict[str, s
     
   # Determine the correct URL for chat endpoint
   if is_remote:
-    # Remote URL format - 'https://ai.okusi.id/api/chat'
+    # Remote URL format - use configured endpoint
     request_url = base_url_str.replace('/v1', '')
     if not request_url.endswith('/chat'):
       request_url = f"{request_url}/chat"
@@ -1102,6 +1199,9 @@ def route_query_by_family(model_family: str, model: str, clients: Dict[str, Any]
   Raises:
     Various exceptions based on provider
   """
+  if not model:
+    raise ValueError("Model name cannot be None or empty")
+    
   if model_family == 'anthropic':
     client = get_anthropic_client(clients)
     return query_anthropic(
@@ -1124,17 +1224,16 @@ def route_query_by_family(model_family: str, model: str, clients: Dict[str, Any]
       api_keys=api_keys
     )
     
-  elif model_family == 'openai' or model.startswith(('gpt', 'chatgpt', 'o1', 'o3', 'o4')):
+  elif model_family == 'openai' or (model and model.startswith(('gpt', 'chatgpt', 'o1', 'o3', 'o4'))):
     client = get_openai_client(clients)
     
     # Special handling for O-series models
-    if model.startswith(('o1', 'o3', 'o4')):
+    if model and model.startswith(('o1', 'o3', 'o4')):
       temperature = 1
         
     return query_openai(
       client, query_text, systemprompt, model, 
-      temperature, max_tokens, conversation_messages,
-      use_responses_api=False  # Keep disabled due to format issues
+      temperature, max_tokens, conversation_messages
     )
   
   return None
@@ -1159,14 +1258,14 @@ def route_query_by_name(model: str, clients: Dict[str, Any], query_text: str,
   Returns:
     Model response or None if no match
   """
-  if model.startswith('claude'):
+  if model and model.startswith('claude'):
     client = get_anthropic_client(clients)
     return query_anthropic(
       client, query_text, systemprompt, model, 
       temperature, max_tokens, conversation_messages
     )
     
-  elif model.startswith(('llama', 'nemo', 'gemma')):
+  elif model and model.startswith(('llama', 'nemo', 'gemma')):
     client = clients.get('ollama')
     if client is None:
       logger.error("Ollama client not available, server might not be running")
@@ -1178,7 +1277,7 @@ def route_query_by_name(model: str, clients: Dict[str, Any], query_text: str,
       api_keys=api_keys
     )
     
-  elif model.startswith('gemini'):
+  elif model and model.startswith('gemini'):
     google_api_key = validate_google_api_key(api_keys)
     return query_gemini(
       query_text, systemprompt, model, temperature, max_tokens, 

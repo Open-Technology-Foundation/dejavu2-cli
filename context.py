@@ -3,7 +3,7 @@
 Context handling for dejavu2-cli.
 
 This module handles retrieving and formatting additional context from reference files 
-and knowledge bases for LLM queries.
+and knowledgebases for LLM queries.
 """
 import os
 import sys
@@ -93,22 +93,22 @@ def get_knowledgebase_string(
     api_keys: dict
 ) -> str:
     """
-    Retrieve and return context from the specified knowledge base as an XML-formatted string.
+    Retrieve and return context from the specified knowledgebase as an XML-formatted string.
     
-    Uses the customKB executable to query the knowledge base and format the results.
+    Uses the customKB executable to query the knowledgebase and format the results.
     
     Args:
-        knowledgebase: Name or path of the knowledge base (.cfg file)
-        knowledgebase_query: Query to send to the knowledge base
+        knowledgebase: Name or path of the knowledgebase (.cfg file)
+        knowledgebase_query: Query to send to the knowledgebase
         customkb_executable: Path to the customKB executable
-        vectordbs_path: Path to look for knowledge base files
+        vectordbs_path: Path to look for knowledgebase files
         api_keys: Dictionary of API keys to pass to the subprocess environment
         
     Returns:
-        String containing the formatted knowledge base results, or empty string if no knowledge base
+        String containing the formatted knowledgebase results, or empty string if no knowledgebase
         
     Raises:
-        KnowledgeBaseError: If the knowledge base cannot be found, executed, or contains invalid paths/queries
+        KnowledgeBaseError: If the knowledgebase cannot be found, executed, or contains invalid paths/queries
     """
     if not knowledgebase:
         return ''
@@ -153,7 +153,7 @@ def get_knowledgebase_string(
                     logger.error(error_msg)
                     raise KnowledgeBaseError(error_msg)
 
-        # Get secure subprocess for knowledge base operations
+        # Get secure subprocess for knowledgebase operations
         secure_subprocess = get_knowledgebase_subprocess()
         
         # Update environment whitelist to include the API keys that are actually set
@@ -176,19 +176,19 @@ def get_knowledgebase_string(
         return f'<knowledgebase>\n{safe_output}\n</knowledgebase>\n\n'
         
     except ValidationError as e:
-        error_msg = f"Invalid knowledge base query: {e}"
+        error_msg = f"Invalid knowledgebase query: {e}"
         logger.error(error_msg)
         raise KnowledgeBaseError(error_msg)
     except SecurityError as e:
-        error_msg = f"Security error in knowledge base query: {e}"
+        error_msg = f"Security error in knowledgebase query: {e}"
         logger.error(error_msg)
         raise KnowledgeBaseError(error_msg)
     except subprocess.CalledProcessError as e:
-        error_msg = f"Knowledge base executable failed: {e}"
+        error_msg = f"Knowledgebase executable failed: {e}"
         logger.error(error_msg)
         raise KnowledgeBaseError(error_msg)
     except (OSError, IOError) as e:
-        error_msg = f"Error executing knowledge base query: {e}"
+        error_msg = f"Error executing knowledgebase query: {e}"
         logger.error(error_msg)
         raise KnowledgeBaseError(error_msg)
     except Exception as e:
@@ -199,22 +199,22 @@ def get_knowledgebase_string(
 
 def list_knowledge_bases(vectordbs_path: str) -> list:
     """
-    List all available knowledge bases in the specified directory.
+    List all available knowledgebases in the specified directory.
     
     Recursively searches for .cfg files in the vectordbs_path directory and
     displays their names in alphabetical order.
     
     Args:
-        vectordbs_path: Path to the directory containing knowledge base files
+        vectordbs_path: Path to the directory containing knowledgebase files
         
     Returns:
-        List of canonical paths to knowledge base files
+        List of canonical paths to knowledgebase files
         
     Raises:
         KnowledgeBaseError: If the vectordbs_path is not a valid directory
     """
     if not os.path.isdir(vectordbs_path):
-        error_msg = f"Knowledge base directory '{vectordbs_path}' is not a valid directory"
+        error_msg = f"Knowledgebase directory '{vectordbs_path}' is not a valid directory"
         logger.error(error_msg)
         raise KnowledgeBaseError(error_msg)
 
@@ -232,7 +232,7 @@ def list_knowledge_bases(vectordbs_path: str) -> list:
     if knowledge_bases:
         sorted_kb_names = sorted([os.path.splitext(os.path.basename(kb))[0]
                                 for kb in knowledge_bases])
-        click.echo("Available Knowledge Bases:")
+        click.echo("Available Knowledgebases:")
         for kb in sorted_kb_names:
             click.echo(f"  {kb}")
     else:

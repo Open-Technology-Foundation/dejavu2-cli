@@ -1,0 +1,54 @@
+#!/bin/bash
+# Bash completion for dv2-models-update (alias for claude-update-models.py)
+
+_dv2_models_update() {
+    local cur prev opts providers
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+    
+    # Available providers
+    providers="anthropic openai google mistral cohere ollama"
+    
+    # Available models
+    models="sonnet opus none"
+    
+    # All options
+    opts="--provider -p --all -a --list-providers -l --dry-run -n --force -f --verbose -v --model -m --help -h"
+    
+    case "${prev}" in
+        --provider|-p)
+            COMPREPLY=($(compgen -W "${providers}" -- ${cur}))
+            return 0
+            ;;
+        --model|-m)
+            COMPREPLY=($(compgen -W "${models}" -- ${cur}))
+            return 0
+            ;;
+    esac
+    
+    case "${cur}" in
+        -*)
+            COMPREPLY=($(compgen -W "${opts}" -- ${cur}))
+            return 0
+            ;;
+        *)
+            # Complete providers for any position (allows multiple --provider options)
+            COMPREPLY=($(compgen -W "${providers} ${opts}" -- ${cur}))
+            return 0
+            ;;
+    esac
+}
+
+# Register completion function
+complete -F _dv2_models_update dv2-models-update
+complete -F _dv2_models_update claude-update-models.py
+
+# Support for both script names
+if [[ -x "./dv2-models-update" ]]; then
+    complete -F _dv2_models_update ./dv2-models-update
+fi
+
+if [[ -x "./claude-update-models.py" ]]; then
+    complete -F _dv2_models_update ./claude-update-models.py
+fi

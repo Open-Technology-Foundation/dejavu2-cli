@@ -26,10 +26,12 @@ class TestDisplay:
         }
         
         model_parameters = {
-            "provider": "openai",
+            "family": "openai",
             "model": "gpt-4o",
             "temperature": 0.5,
             "max_tokens": 1000,
+            "max_output_tokens": 1000,
+            "context_window": 128000,
             "systemprompt": "You are a test assistant."
         }
         

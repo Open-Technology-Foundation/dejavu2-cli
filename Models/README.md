@@ -14,7 +14,7 @@ The `Models.json` file is a critical infrastructure component that provides:
 
 This registry powers several applications:
 - **dejavu2-cli / dv2**: Command-line LLM interface with multi-provider support
-- **customkb**: Knowledge base system with AI integration
+- **customkb**: Knowledgebase system with AI integration
 - **WAHID website**: Web-based AI interaction platform
 - **Various utility programs**: Model selection, cost analysis, and capability checking tools
 

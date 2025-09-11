@@ -53,7 +53,7 @@ python -m pytest --cov=dejavu2_cli --cov-report=term-missing
 ## Skipping Tests
 
 - Tests requiring API keys will be skipped if the relevant keys are not set in the environment
-- Knowledge base tests will be skipped if the okusiassociates.cfg file is not available
+- Knowledgebase tests will be skipped if the okusiassociates.cfg file is not available
 
 ## Adding New Tests
 

@@ -70,14 +70,14 @@ class TestContext:
         assert ref_string == ""
     
     def test_get_knowledgebase_string(self):
-        """Test knowledge base query function."""
+        """Test knowledgebase query function."""
         with patch('context.validate_knowledgebase_query', return_value="safe query"):
             with patch('context.validate_file_path', side_effect=lambda x, must_exist=False: x):
                 with patch('os.path.exists', return_value=True):
                     with patch('context.get_knowledgebase_subprocess') as mock_subprocess:
                         # Mock the subprocess properly with a run method
                         mock_proc = MagicMock()
-                        mock_proc.run.return_value.stdout = "Knowledge base content about query"
+                        mock_proc.run.return_value.stdout = "Knowledgebase content about query"
                         mock_subprocess.return_value = mock_proc
                         
                         result = get_knowledgebase_string(
@@ -90,11 +90,11 @@ class TestContext:
                         
                         # Verify the result
                         assert "<knowledgebase>" in result
-                        assert "Knowledge base content about query" in result
+                        assert "Knowledgebase content about query" in result
                         assert "</knowledgebase>" in result
     
     def test_get_knowledgebase_string_failure(self):
-        """Test knowledge base query function when subprocess fails."""
+        """Test knowledgebase query function when subprocess fails."""
         with patch('context.validate_knowledgebase_query', return_value="safe query"):
             with patch('context.validate_file_path', side_effect=lambda x, must_exist=False: x):
                 with patch('os.path.exists', return_value=True):

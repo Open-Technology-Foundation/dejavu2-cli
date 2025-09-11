@@ -44,7 +44,7 @@ The dejavu2-cli codebase demonstrates strong architectural design with clear mod
 1. Implement async/await pattern for API calls
 2. Add comprehensive integration tests with mocked APIs
 3. Migrate from requirements.txt to Poetry for better dependency management
-4. Implement connection pooling for knowledge base subprocess
+4. Implement connection pooling for knowledgebase subprocess
 5. Add structured logging with request IDs for better debugging
 
 ## 1. Code Quality & Architecture Assessment

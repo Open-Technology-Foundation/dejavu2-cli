@@ -144,7 +144,7 @@ def list_template_names(template_path: str) -> List[str]:
     List the names and basic details of all templates in a columnar format.
     
     Displays a table with template names, models, temperature settings,
-    token limits, and knowledge base settings.
+    token limits, and knowledgebase settings.
     
     Args:
         template_path: Path to the templates file
@@ -166,7 +166,7 @@ def list_template_names(template_path: str) -> List[str]:
         ('Model', 'model'),
         ('Temp', 'temperature'),
         ('Tokens', 'max_tokens'),
-        ('Knowledge Base', 'knowledgebase')
+        ('Knowledgebase', 'knowledgebase')
     ]
     
     # Calculate the maximum width needed for each column
