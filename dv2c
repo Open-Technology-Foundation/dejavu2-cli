@@ -148,7 +148,7 @@ printf "${BOLD}${HEADER_COLOR}DejaVu2 Interactive Shell${RESET}\n"
 printf "${YELLOW}Type ${BOLD}/help${RESET}${YELLOW} for available commands${RESET}\n"
 
 # Main interaction loop
-while ((1)); do
+while :; do
   if [[ -n "${MULTILINE:-}" ]]; then
     # Multiline input mode
     show_message "$BLUE" "Enter multiline input (^D when done):"
