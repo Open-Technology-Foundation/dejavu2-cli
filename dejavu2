@@ -1,7 +1,8 @@
 #!/bin/bash
-#shellcheck disable=SC1091
+#shellcheck disable=SC1091,SC2155
 set -euo pipefail
-PRG0=$(readlink -fn -- "$0")
-PRGDIR=${PRG0%/*}
-source "$PRGDIR"/.venv/bin/activate
-"$PRGDIR"/.venv/bin/python3 "$PRGDIR"/main.py "$@"
+declare -r SCRIPT_PATH=$(realpath -e -- "$0")
+declare -r SCRIPT_DIR=${SCRIPT_PATH%/*}
+source "$SCRIPT_DIR"/.venv/bin/activate
+"$SCRIPT_DIR"/.venv/bin/python3 "$SCRIPT_DIR"/main.py "$@"
+#fin

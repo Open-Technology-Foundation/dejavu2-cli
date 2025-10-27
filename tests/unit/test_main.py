@@ -102,7 +102,7 @@ class TestMain:
         
         assert result.exit_code == 0
         mock_list_templates.assert_called_once_with(
-            os.path.join(main.PRGDIR, 'Agents.json'), 'all'
+            os.path.join(main.SCRIPT_DIR, 'Agents.json'), 'all'
         )
     
     @patch('main.load_config')

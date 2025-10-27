@@ -27,7 +27,7 @@ from conversations import ConversationManager
 from errors import ConfigurationError, ModelError, TemplateError, ConversationError, ReferenceError, KnowledgeBaseError
 
 # Constants
-PRGDIR = os.path.dirname(os.path.realpath(__file__))
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 # Import version from version.py module
 try:
     from version import __version__ as VERSION
@@ -36,7 +36,7 @@ except ImportError:
     click.echo("Warning: version.py not found. Using 'unknown'.", err=True)
 
 SCRIPT_NAME = os.path.splitext(os.path.basename(__file__))[0]
-DEFAULT_CONFIG_PATH = os.path.join(PRGDIR, 'defaults.yaml')
+DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, 'defaults.yaml')
 USER_CONFIG_PATH = os.path.expanduser('~/.config/dejavu2-cli/config.yaml')
 
 # Setup logging will be done later with command line arguments
@@ -85,8 +85,8 @@ def setup_application(kwargs: Dict[str, Any]) -> tuple:
   config_logger.debug(f"Configuration loaded from {config.get('config_file', 'defaults')}")
 
   # Set up paths
-  template_path = os.path.join(PRGDIR, config['paths']['template_path'])
-  models_json_path = os.path.join(PRGDIR, 'Models.json')
+  template_path = os.path.join(SCRIPT_DIR, config['paths']['template_path'])
+  models_json_path = os.path.join(SCRIPT_DIR, 'Models.json')
   customkb_executable = config['paths'].get('customkb', '/ai/scripts/customkb/customkb')
   vectordbs_path = config.get('vectordbs_path', '/var/lib/vectordbs')
   
