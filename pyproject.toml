@@ -1,0 +1,94 @@
+[project]
+name = "dejavu2-cli"
+version = "0.8.38"
+description = "CLI tool for querying LLMs with context from reference files and knowledge bases"
+requires-python = ">=3.12"
+
+[tool.ruff]
+# Project uses 2-space indentation (non-PEP 8 standard)
+line-length = 150
+indent-width = 2
+target-version = "py312"
+
+# Exclude virtual environments and cache directories
+exclude = [
+    ".venv",
+    "venv",
+    ".git",
+    "__pycache__",
+    "*.pyc",
+    ".pytest_cache",
+    ".mypy_cache",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+# Enable pycodestyle (E, W), pyflakes (F), and isort (I)
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "C4",  # flake8-comprehensions
+    "SIM", # flake8-simplify
+]
+
+# Ignore specific rules
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+    "E111",  # Indentation is not a multiple of 4 (we use 2-space)
+    "E114",  # Indentation is not a multiple of 4 (comment) (we use 2-space)
+    "E117",  # Over-indented (we use 2-space)
+]
+
+# Allow autofix for all enabled rules
+fixable = ["ALL"]
+unfixable = []
+
+[tool.ruff.format]
+# Use 2-space indentation (project standard)
+indent-style = "space"
+quote-style = "double"
+line-ending = "auto"
+
+# Respect magic trailing comma
+skip-magic-trailing-comma = false
+
+[tool.ruff.lint.isort]
+# Configure import sorting
+known-first-party = ["dejavu2"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.lint.pyupgrade]
+# Keep runtime typing for Python 3.12+
+keep-runtime-typing = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["."]
+omit = [
+    "*/tests/*",
+    "*/.venv/*",
+    "*/venv/*",
+    "*/site-packages/*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "if TYPE_CHECKING:",
+    "@abstractmethod",
+]

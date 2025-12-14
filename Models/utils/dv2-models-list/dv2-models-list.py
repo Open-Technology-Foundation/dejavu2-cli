@@ -47,238 +47,214 @@ Common Fields:
   vision, context_window, max_output_tokens
 """
 
+import argparse
 import json
 import pathlib
-import argparse
 import sys
-from typing import Dict, List, Any, Optional, Tuple
+from typing import Any
 
 # Import our modules
 from filters import FilterChain
-from formatters import TableFormatter, JSONFormatter, CSVFormatter, YAMLFormatter, TreeFormatter
-from query_parser import parse_filter_expression
+from formatters import CSVFormatter, JSONFormatter, TableFormatter, TreeFormatter, YAMLFormatter
 from model_stats import ModelStatistics
 from presets import FILTER_PRESETS
+from query_parser import parse_filter_expression
 
 # Get script directory
 script_dir = pathlib.Path(__file__).resolve().parent
 
+
 def create_parser():
   """Create argument parser with all options."""
-  parser = argparse.ArgumentParser(
-    prog='dv2-models-list',
-    description=__doc__,
-    formatter_class=argparse.RawDescriptionHelpFormatter
-  )
-  
+  parser = argparse.ArgumentParser(prog="dv2-models-list", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+
   # Filter options
-  filter_group = parser.add_argument_group('Filtering Options')
-  filter_group.add_argument('-F', '--filter', action='append', dest='filters',
-    help='Filter expression: "field:operator:value" (can specify multiple)')
-  filter_group.add_argument('-O', '--or', action='store_true', dest='use_or',
-    help='Use OR logic between filters (default: AND)')
-  filter_group.add_argument('-N', '--not', action='store_true', dest='negate',
-    help='Negate all filters')
-  filter_group.add_argument('--case-sensitive', '-C', action='store_true',
-    help='Use case-sensitive string matching')
-  filter_group.add_argument('-P', '--preset', choices=list(FILTER_PRESETS.keys()),
-    help='Use a predefined filter preset')
-  
+  filter_group = parser.add_argument_group("Filtering Options")
+  filter_group.add_argument(
+    "-F", "--filter", action="append", dest="filters", help='Filter expression: "field:operator:value" (can specify multiple)'
+  )
+  filter_group.add_argument("-O", "--or", action="store_true", dest="use_or", help="Use OR logic between filters (default: AND)")
+  filter_group.add_argument("-N", "--not", action="store_true", dest="negate", help="Negate all filters")
+  filter_group.add_argument("--case-sensitive", "-C", action="store_true", help="Use case-sensitive string matching")
+  filter_group.add_argument("-P", "--preset", choices=list(FILTER_PRESETS.keys()), help="Use a predefined filter preset")
+
   # Quick filter options
-  quick_group = parser.add_argument_group('Quick Filter Options')
-  quick_group.add_argument('-a', '--alias',
-    help='Filter by alias (shortcut for -F "alias:equals:value")')
-  quick_group.add_argument('-p', '--parent',
-    help='Filter by parent/provider (shortcut for -F "parent:equals:value")')
-  quick_group.add_argument('-c', '--model-category',
-    help='Filter by category (shortcut for -F "model_category:equals:value")')
-  quick_group.add_argument('-f', '--family',
-    help='Filter by family (shortcut for -F "family:equals:value")')
-  quick_group.add_argument('-v', '--available', type=int,
-    help='Filter by available level <= N')
-  quick_group.add_argument('-e', '--enabled', type=int,
-    help='Filter by enabled level <= N')
-  
+  quick_group = parser.add_argument_group("Quick Filter Options")
+  quick_group.add_argument("-a", "--alias", help='Filter by alias (shortcut for -F "alias:equals:value")')
+  quick_group.add_argument("-p", "--parent", help='Filter by parent/provider (shortcut for -F "parent:equals:value")')
+  quick_group.add_argument("-c", "--model-category", help='Filter by category (shortcut for -F "model_category:equals:value")')
+  quick_group.add_argument("-f", "--family", help='Filter by family (shortcut for -F "family:equals:value")')
+  quick_group.add_argument("-v", "--available", type=int, help="Filter by available level <= N")
+  quick_group.add_argument("-e", "--enabled", type=int, help="Filter by enabled level <= N")
+
   # Output format options
-  format_group = parser.add_argument_group('Output Format Options')
-  format_group.add_argument('--format', '-o', 
-    choices=['default', 'table', 'json', 'csv', 'yaml', 'tree'],
-    default='default',
-    help='Output format (default: simple list)')
-  format_group.add_argument('--columns', '-col',
-    help='Comma-separated list of columns for table/csv output')
-  format_group.add_argument('-H', '--no-header', action='store_true',
-    help='Omit header row in table/csv output')
-  format_group.add_argument('--group', '-g',
-    help='Group results by field (for tree output)')
-  
+  format_group = parser.add_argument_group("Output Format Options")
+  format_group.add_argument(
+    "--format", "-o", choices=["default", "table", "json", "csv", "yaml", "tree"], default="default", help="Output format (default: simple list)"
+  )
+  format_group.add_argument("--columns", "-col", help="Comma-separated list of columns for table/csv output")
+  format_group.add_argument("-H", "--no-header", action="store_true", help="Omit header row in table/csv output")
+  format_group.add_argument("--group", "-g", help="Group results by field (for tree output)")
+
   # Sorting and limiting
-  sort_group = parser.add_argument_group('Sorting and Limiting')
-  sort_group.add_argument('--sort', '-s',
-    help='Comma-separated fields to sort by')
-  sort_group.add_argument('--reverse', '-r', action='store_true',
-    help='Reverse sort order')
-  sort_group.add_argument('--limit', '-l', type=int,
-    help='Limit output to N results')
-  
+  sort_group = parser.add_argument_group("Sorting and Limiting")
+  sort_group.add_argument("--sort", "-s", help="Comma-separated fields to sort by")
+  sort_group.add_argument("--reverse", "-r", action="store_true", help="Reverse sort order")
+  sort_group.add_argument("--limit", "-l", type=int, help="Limit output to N results")
+
   # Statistics
-  stats_group = parser.add_argument_group('Statistics and Analysis')
-  stats_group.add_argument('-S', '--stats', action='store_true',
-    help='Show model statistics')
-  stats_group.add_argument('-b', '--count-by',
-    help='Count models by field value')
-  stats_group.add_argument('-u', '--unique',
-    help='Show unique values for a field')
-  
+  stats_group = parser.add_argument_group("Statistics and Analysis")
+  stats_group.add_argument("-S", "--stats", action="store_true", help="Show model statistics")
+  stats_group.add_argument("-b", "--count-by", help="Count models by field value")
+  stats_group.add_argument("-u", "--unique", help="Show unique values for a field")
+
   # Other options
-  parser.add_argument('-m', '--models-file',
-    default=script_dir / 'Models.json',
-    help='Path to Models.json file')
-  parser.add_argument('-d', '--include-disabled', action='store_true',
-    help='Include models with available=0 or enabled=0')
-  
+  parser.add_argument("-m", "--models-file", default=script_dir / "Models.json", help="Path to Models.json file")
+  parser.add_argument("-d", "--include-disabled", action="store_true", help="Include models with available=0 or enabled=0")
+
   return parser
 
-def load_models(json_path: pathlib.Path) -> Dict[str, Any]:
+
+def load_models(json_path: pathlib.Path) -> dict[str, Any]:
   """Load models from JSON file."""
   try:
-    with open(json_path, 'r', encoding='utf-8') as f:
+    with open(json_path, encoding="utf-8") as f:
       return json.load(f)
   except Exception as e:
     print(f"Error loading models file: {e}", file=sys.stderr)
     sys.exit(1)
 
-def apply_legacy_filters(args) -> List[Tuple[str, str, str]]:
+
+def apply_legacy_filters(args) -> list[tuple[str, str, str]]:
   """Convert legacy filter arguments to new filter format."""
   filters = []
-  
+
   if args.alias:
-    filters.append(('alias', 'equals', args.alias))
+    filters.append(("alias", "equals", args.alias))
   if args.parent:
-    filters.append(('parent', 'equals', args.parent))
+    filters.append(("parent", "equals", args.parent))
   if args.model_category:
-    filters.append(('model_category', 'equals', args.model_category))
+    filters.append(("model_category", "equals", args.model_category))
   if args.family:
-    filters.append(('family', 'equals', args.family))
+    filters.append(("family", "equals", args.family))
   if args.available is not None:
-    filters.append(('available', '<=', str(args.available)))
+    filters.append(("available", "<=", str(args.available)))
   if args.enabled is not None:
-    filters.append(('enabled', '<=', str(args.enabled)))
-    
+    filters.append(("enabled", "<=", str(args.enabled)))
+
   return filters
+
 
 def main():
   """Main entry point."""
   parser = create_parser()
   args = parser.parse_args()
-  
+
   # Load models
   models = load_models(args.models_file)
-  
+
   # Build filter chain
   filter_chain = FilterChain(use_or=args.use_or, negate=args.negate)
-  
+
   # Add preset filters if specified
   if args.preset:
     preset_filters = FILTER_PRESETS.get(args.preset, [])
     for filter_expr in preset_filters:
       field, op, value = parse_filter_expression(filter_expr)
       filter_chain.add_filter(field, op, value, args.case_sensitive)
-  
+
   # Add explicit filters
   if args.filters:
     for filter_expr in args.filters:
       field, op, value = parse_filter_expression(filter_expr)
       filter_chain.add_filter(field, op, value, args.case_sensitive)
-  
+
   # Add legacy filters (with deprecation warning)
   legacy_filters = apply_legacy_filters(args)
   if legacy_filters:
     print("Warning: Legacy filter options are deprecated. Use -F instead.", file=sys.stderr)
     for field, op, value in legacy_filters:
       filter_chain.add_filter(field, op, value, args.case_sensitive)
-  
+
   # Apply filters
   filtered_models = {}
   for name, data in models.items():
     # Skip disabled models unless requested
-    if not args.include_disabled:
-      if data.get('available', 0) == 0 or data.get('enabled', 0) == 0:
-        continue
-    
+    if not args.include_disabled and (data.get("available", 0) == 0 or data.get("enabled", 0) == 0):
+      continue
+
     if filter_chain.matches(data):
       filtered_models[name] = data
-  
+
   # Handle statistics requests
   if args.stats:
     stats = ModelStatistics(filtered_models)
     stats.print_summary()
     return
-  
+
   if args.count_by:
     stats = ModelStatistics(filtered_models)
     stats.print_count_by(args.count_by)
     return
-  
+
   if args.unique:
     stats = ModelStatistics(filtered_models)
     stats.print_unique_values(args.unique)
     return
-  
+
   # Sort models if requested
   if args.sort:
-    sort_fields = [f.strip() for f in args.sort.split(',')]
+    sort_fields = [f.strip() for f in args.sort.split(",")]
     filtered_models = sort_models(filtered_models, sort_fields, args.reverse)
-  
+
   # Apply limit if specified
   if args.limit:
-    model_items = list(filtered_models.items())[:args.limit]
+    model_items = list(filtered_models.items())[: args.limit]
     filtered_models = dict(model_items)
-  
+
   # Format and display output
   formatter = get_formatter(args.format)
-  columns = args.columns.split(',') if args.columns else None
-  
-  output = formatter.format(
-    filtered_models,
-    columns=columns,
-    show_header=not args.no_header,
-    group_by=args.group
-  )
-  
+  columns = args.columns.split(",") if args.columns else None
+
+  output = formatter.format(filtered_models, columns=columns, show_header=not args.no_header, group_by=args.group)
+
   print(output)
 
-def sort_models(models: Dict[str, Any], sort_fields: List[str], reverse: bool = False) -> Dict[str, Any]:
+
+def sort_models(models: dict[str, Any], sort_fields: list[str], reverse: bool = False) -> dict[str, Any]:
   """Sort models by specified fields."""
+
   def sort_key(item):
     name, data = item
     keys = []
     for field in sort_fields:
-      if field == 'model':
+      if field == "model":
         keys.append(name)
       else:
-        value = data.get(field, '')
+        value = data.get(field, "")
         # Handle None values
         if value is None:
-          value = ''
+          value = ""
         keys.append(value)
     return keys
-  
+
   sorted_items = sorted(models.items(), key=sort_key, reverse=reverse)
   return dict(sorted_items)
+
 
 def get_formatter(format_name: str):
   """Get the appropriate formatter based on format name."""
   formatters = {
-    'default': TableFormatter(mode='simple'),
-    'table': TableFormatter(mode='full'),
-    'json': JSONFormatter(),
-    'csv': CSVFormatter(),
-    'yaml': YAMLFormatter(),
-    'tree': TreeFormatter()
+    "default": TableFormatter(mode="simple"),
+    "table": TableFormatter(mode="full"),
+    "json": JSONFormatter(),
+    "csv": CSVFormatter(),
+    "yaml": YAMLFormatter(),
+    "tree": TreeFormatter(),
   }
-  return formatters.get(format_name, formatters['default'])
+  return formatters.get(format_name, formatters["default"])
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
   main()
-#fin
+# fin
