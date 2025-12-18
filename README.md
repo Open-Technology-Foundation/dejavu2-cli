@@ -22,7 +22,7 @@ A powerful command-line interface for interacting with various Large Language Mo
 
 `dejavu2-cli` (also available as `dv2`) is a versatile command-line tool for executing queries to multiple language models from various providers. It provides a unified interface for AI interactions with support for conversation history, contextual inputs, customizable parameters, and agent templates.
 
-**Current Version**: 0.8.40
+**Current Version**: 0.8.42
 
 ## Features
 
@@ -45,7 +45,7 @@ A powerful command-line interface for interacting with various Large Language Mo
 
 ### Prerequisites
 
-- Python 3.9 or higher (3.10+ recommended)
+- Python 3.12 or higher
 - pip package manager
 - Git (for cloning the repository)
 - API keys for desired LLM providers
@@ -511,7 +511,7 @@ dejavu2-cli/
 
 ### Testing
 
-The test suite includes 320+ tests across unit, integration, and functional categories.
+The test suite includes 322 tests across unit, integration, and functional categories.
 
 ```bash
 # Run all tests
@@ -625,6 +625,6 @@ Contributions are welcome! Please:
 
 ---
 
-**Current Version**: 0.8.40 | **Status**: Active Development | **Python**: 3.9+
+**Current Version**: 0.8.42 | **Status**: Active Development | **Python**: 3.12+
 
 #fin
