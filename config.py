@@ -64,7 +64,7 @@ def load_config(default_config_path, user_config_path=None):
     logger.error(error_msg)
     click.echo(f"Error: {error_msg}", err=True)
     raise
-  except (IOError, OSError) as e:
+  except OSError as e:
     error_msg = f"I/O error loading default config: {e}"
     logger.error(error_msg)
     click.echo(f"Error: {error_msg}", err=True)
@@ -103,7 +103,7 @@ def load_config(default_config_path, user_config_path=None):
       logger.error(error_msg)
       click.echo(f"Error: {error_msg}", err=True)
       raise
-    except (IOError, OSError) as e:
+    except OSError as e:
       error_msg = f"I/O error loading user config: {e}"
       logger.error(error_msg)
       click.echo(f"Error: {error_msg}", err=True)

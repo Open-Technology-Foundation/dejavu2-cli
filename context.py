@@ -63,19 +63,19 @@ def get_reference_string(reference: str) -> str:
     except ValidationError as e:
       error_msg = f"Invalid reference file path '{file_name}': {e}"
       logger.error(error_msg)
-      raise ReferenceError(error_msg)
-    except FileNotFoundError:
+      raise ReferenceError(error_msg) from e
+    except FileNotFoundError as e:
       error_msg = f"Reference file not found: '{file_name}'"
       logger.error(error_msg)
-      raise ReferenceError(error_msg)
+      raise ReferenceError(error_msg) from e
     except OSError as e:
       error_msg = f"Cannot read reference file '{file_name}': {e}"
       logger.error(error_msg)
-      raise ReferenceError(error_msg)
+      raise ReferenceError(error_msg) from e
     except UnicodeDecodeError as e:
       error_msg = f"Cannot decode reference file '{file_name}': {e}"
       logger.error(error_msg)
-      raise ReferenceError(error_msg)
+      raise ReferenceError(error_msg) from e
 
   return reference_string
 
@@ -165,23 +165,23 @@ def get_knowledgebase_string(knowledgebase: str, knowledgebase_query: str, custo
   except ValidationError as e:
     error_msg = f"Invalid knowledgebase query: {e}"
     logger.error(error_msg)
-    raise KnowledgeBaseError(error_msg)
+    raise KnowledgeBaseError(error_msg) from e
   except SecurityError as e:
     error_msg = f"Security error in knowledgebase query: {e}"
     logger.error(error_msg)
-    raise KnowledgeBaseError(error_msg)
+    raise KnowledgeBaseError(error_msg) from e
   except subprocess.CalledProcessError as e:
     error_msg = f"Knowledgebase executable failed: {e}"
     logger.error(error_msg)
-    raise KnowledgeBaseError(error_msg)
+    raise KnowledgeBaseError(error_msg) from e
   except OSError as e:
     error_msg = f"Error executing knowledgebase query: {e}"
     logger.error(error_msg)
-    raise KnowledgeBaseError(error_msg)
+    raise KnowledgeBaseError(error_msg) from e
   except Exception as e:
     error_msg = f"Unexpected error querying knowledgebase: {e}"
     logger.error(error_msg)
-    raise KnowledgeBaseError(error_msg)
+    raise KnowledgeBaseError(error_msg) from e
 
 
 def list_knowledge_bases(vectordbs_path: str) -> list:
