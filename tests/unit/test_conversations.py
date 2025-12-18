@@ -1,5 +1,11 @@
 """
 Unit tests for the conversations module in dejavu2-cli.
+
+Test Classes:
+- TestMessage: Message creation, serialization, and deserialization
+- TestConversation: Conversation operations, message management, export
+- TestConversationManager: Storage operations, listing, deletion
+- TestFileLocking: File locking behavior (fcntl.flock) during conversation saves
 """
 
 import datetime
@@ -746,3 +752,168 @@ class TestConversationManager:
       content = manager.export_conversation_to_markdown(conv_id="test-md-id")
       assert isinstance(content, str)
       assert "# Export Test" in content
+
+
+class TestFileLocking:
+  """Test file locking behavior in conversation saving."""
+
+  def test_save_conversation_uses_file_locking(self):
+    """Test that save_conversation uses fcntl.flock for file locking."""
+    import fcntl
+
+    with tempfile.TemporaryDirectory() as temp_dir, patch("pathlib.Path.mkdir"):
+      manager = ConversationManager(storage_dir=temp_dir)
+
+      # Create a test conversation
+      conv = Conversation(id="lock-test-id", title="Lock Test")
+      conv.add_message("user", "Test message")
+      manager.active_conversation = conv
+
+      # Mock fcntl.flock to track calls
+      with patch("fcntl.flock") as mock_flock:
+        manager.save_conversation()
+
+        # Verify flock was called twice (lock and unlock)
+        assert mock_flock.call_count == 2
+
+        # First call should be exclusive lock
+        first_call_args = mock_flock.call_args_list[0][0]
+        assert first_call_args[1] == fcntl.LOCK_EX
+
+        # Second call should be unlock
+        second_call_args = mock_flock.call_args_list[1][0]
+        assert second_call_args[1] == fcntl.LOCK_UN
+
+      # Verify the file was created correctly
+      conv_path = os.path.join(temp_dir, "lock-test-id.json")
+      assert os.path.exists(conv_path)
+
+      with open(conv_path) as f:
+        saved_data = json.load(f)
+        assert saved_data["id"] == "lock-test-id"
+        assert saved_data["title"] == "Lock Test"
+
+  def test_save_conversation_blocking_io_error(self):
+    """Test that BlockingIOError is handled when file is locked."""
+    with tempfile.TemporaryDirectory() as temp_dir, patch("pathlib.Path.mkdir"):
+      manager = ConversationManager(storage_dir=temp_dir)
+
+      # Create a test conversation
+      conv = Conversation(id="blocking-test-id", title="Blocking Test")
+      conv.add_message("user", "Test message")
+      manager.active_conversation = conv
+
+      # Mock fcntl.flock to raise BlockingIOError
+      with patch("fcntl.flock") as mock_flock:
+        mock_flock.side_effect = BlockingIOError("Resource temporarily unavailable")
+
+        with pytest.raises(ConversationError) as exc_info:
+          manager.save_conversation()
+
+        assert "locked by another process" in str(exc_info.value)
+
+  def test_save_conversation_os_error(self):
+    """Test that OSError during file write is handled."""
+    with tempfile.TemporaryDirectory() as temp_dir, patch("pathlib.Path.mkdir"):
+      manager = ConversationManager(storage_dir=temp_dir)
+
+      # Create a test conversation
+      conv = Conversation(id="os-error-test-id", title="OS Error Test")
+      conv.add_message("user", "Test message")
+      manager.active_conversation = conv
+
+      # Mock open to raise OSError
+      with patch("builtins.open") as mock_open:
+        mock_open.side_effect = OSError("Permission denied")
+
+        with pytest.raises(ConversationError) as exc_info:
+          manager.save_conversation()
+
+        assert "Error writing conversation file" in str(exc_info.value)
+
+  def test_save_conversation_serialization_error(self):
+    """Test that serialization errors are handled."""
+    with tempfile.TemporaryDirectory() as temp_dir, patch("pathlib.Path.mkdir"):
+      manager = ConversationManager(storage_dir=temp_dir)
+
+      # Create a test conversation
+      conv = Conversation(id="serialize-test-id", title="Serialize Test")
+      conv.add_message("user", "Test message")
+      manager.active_conversation = conv
+
+      # Mock conv.to_dict to return non-serializable data
+      with patch.object(conv, "to_dict") as mock_to_dict:
+        # Return something that can't be JSON serialized
+        mock_to_dict.return_value = {"circular": object()}
+
+        with pytest.raises(ConversationError) as exc_info:
+          manager.save_conversation()
+
+        assert "Error serializing conversation" in str(exc_info.value)
+
+  def test_save_conversation_no_active_conversation(self):
+    """Test that saving with no active conversation raises error."""
+    with tempfile.TemporaryDirectory() as temp_dir, patch("pathlib.Path.mkdir"):
+      manager = ConversationManager(storage_dir=temp_dir)
+
+      # Don't set active_conversation
+      with pytest.raises(ConversationError) as exc_info:
+        manager.save_conversation()
+
+      assert "No conversation to save" in str(exc_info.value)
+
+  def test_save_conversation_explicit_conv_parameter(self):
+    """Test saving a specific conversation rather than active one."""
+    with tempfile.TemporaryDirectory() as temp_dir, patch("pathlib.Path.mkdir"):
+      manager = ConversationManager(storage_dir=temp_dir)
+
+      # Create a test conversation but don't set as active
+      conv = Conversation(id="explicit-test-id", title="Explicit Test")
+      conv.add_message("user", "Test message")
+
+      # Save explicitly passing conv parameter
+      manager.save_conversation(conv=conv)
+
+      # Verify the file was created
+      conv_path = os.path.join(temp_dir, "explicit-test-id.json")
+      assert os.path.exists(conv_path)
+
+      with open(conv_path) as f:
+        saved_data = json.load(f)
+        assert saved_data["id"] == "explicit-test-id"
+
+  def test_save_conversation_lock_released_on_exception(self):
+    """Test that file lock is released even when an exception occurs during write."""
+    import fcntl
+
+    with tempfile.TemporaryDirectory() as temp_dir, patch("pathlib.Path.mkdir"):
+      manager = ConversationManager(storage_dir=temp_dir)
+
+      # Create a test conversation
+      conv = Conversation(id="unlock-test-id", title="Unlock Test")
+      conv.add_message("user", "Test message")
+      manager.active_conversation = conv
+
+      flock_calls = []
+
+      def track_flock(fd, operation):
+        flock_calls.append(operation)
+        # Simulate successful lock but error during write
+        if operation == fcntl.LOCK_EX:
+          pass  # Lock succeeds
+        elif operation == fcntl.LOCK_UN:
+          pass  # Unlock succeeds
+
+      # Mock json.dump to fail after lock acquired
+      with patch("fcntl.flock", side_effect=track_flock), patch("json.dump") as mock_dump:
+        mock_dump.side_effect = ValueError("Serialization failed")
+
+        with pytest.raises(ConversationError):
+          manager.save_conversation()
+
+        # Verify both lock and unlock were called
+        assert fcntl.LOCK_EX in flock_calls
+        assert fcntl.LOCK_UN in flock_calls
+
+
+# fin

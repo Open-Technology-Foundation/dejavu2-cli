@@ -4,8 +4,21 @@ Conversation management module for dejavu2-cli.
 
 This module handles the storage, retrieval, and manipulation of conversation
 history for maintaining context across multiple queries.
+
+Key Features:
+- Persistent JSON storage with file locking (fcntl) for concurrent access safety
+- Conversation metadata tracking (model, temperature, timestamps)
+- Message pair removal for conversation history editing
+- Markdown export for conversation archival
+- LLM-assisted title generation
+
+Classes:
+- Message: Single message with role, content, and timestamp
+- Conversation: Collection of messages with metadata
+- ConversationManager: Storage operations with file locking
 """
 
+import fcntl
 import json
 import logging
 import os
@@ -337,12 +350,20 @@ class ConversationManager:
       raise ConversationError(error_msg)
 
     try:
-      # Serialize and save
+      # Serialize and save with file locking
       conv_path = self.storage_dir / f"{conv.id}.json"
       with open(conv_path, "w", encoding="utf-8") as f:
-        json.dump(conv.to_dict(), f, indent=2, ensure_ascii=False)
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)  # Exclusive lock
+        try:
+          json.dump(conv.to_dict(), f, indent=2, ensure_ascii=False)
+        finally:
+          fcntl.flock(f.fileno(), fcntl.LOCK_UN)  # Release lock
 
       logger.debug(f"Saved conversation: {conv.id}")
+    except BlockingIOError as e:
+      error_msg = f"Conversation file locked by another process {conv.id}: {str(e)}"
+      logger.error(error_msg)
+      raise ConversationError(error_msg)
     except OSError as e:
       error_msg = f"Error writing conversation file {conv.id}: {str(e)}"
       logger.error(error_msg)

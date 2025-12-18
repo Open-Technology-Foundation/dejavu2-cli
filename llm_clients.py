@@ -2,8 +2,29 @@
 """
 LLM client handlers for dejavu2-cli.
 
-This module contains client initialization and query functions for
-various LLM providers: OpenAI, Anthropic, Google, and both local and remote Ollama models.
+This module provides client initialization and query functions for multiple LLM providers:
+- OpenAI (GPT-4, GPT-5, O-series reasoning models)
+- Anthropic (Claude 3.5, Claude 4 with extended thinking)
+- Google (Gemini 2.0/2.5 via google-genai SDK)
+- Ollama (local and remote deployments)
+
+Key Features:
+- Unified query interface via route_query_by_family()
+- Provider-specific exception handling with SDK exception types
+- Subprocess isolation for Gemini to suppress GRPC warnings
+- Support for reasoning models with configurable effort levels
+- Conversation history management for multi-turn interactions
+
+Exception Handling:
+- SDK-specific exceptions (anthropic.AuthenticationError, openai.RateLimitError, etc.)
+  are caught and converted to custom exceptions from errors.py
+- This provides consistent error handling across providers while preserving
+  detailed error information for debugging
+
+Google SDK Note:
+- Uses google-genai SDK (not google-generativeai) as of 2025
+- Client pattern: genai.Client(api_key=...) instead of genai.configure()
+- Model listing: client.models.list() instead of genai.list_models()
 """
 
 import json
@@ -23,7 +44,10 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 # Import LLM provider libraries
 # Note: These are imported at module level for easier mocking in tests
-import google.generativeai as genai
+import anthropic
+import openai
+from google import genai
+from google.genai import types as genai_types
 from anthropic import Anthropic
 from openai import OpenAI
 
@@ -74,11 +98,21 @@ def initialize_clients(api_keys: dict[str, str]) -> dict[str, Any]:
   """
   Initialize client objects for various LLM providers.
 
+  Creates client instances for Anthropic, OpenAI, Google (Gemini), and Ollama.
+  Each client is initialized with error handling for invalid parameters,
+  authentication failures, and connection errors. Failed initializations
+  result in None values (graceful degradation).
+
   Args:
-      api_keys: Dictionary containing API keys for each provider
+      api_keys: Dictionary containing API keys:
+          - ANTHROPIC_API_KEY: For Claude models
+          - OPENAI_API_KEY: For GPT/O-series models
+          - GOOGLE_API_KEY: For Gemini models
+          - OLLAMA_API_KEY: For Ollama (defaults to "llama")
 
   Returns:
-      Dictionary mapping provider names to client objects
+      Dictionary with keys: anthropic, openai, google, ollama_local, ollama
+      Values are client objects or None if initialization failed.
   """
   clients = {}
 
@@ -88,8 +122,14 @@ def initialize_clients(api_keys: dict[str, str]) -> dict[str, Any]:
       clients["anthropic"] = Anthropic(api_key=api_keys["ANTHROPIC_API_KEY"])
       # Use a single consistent beta header with 2025 features (removed deprecated output-128k)
       clients["anthropic"].beta_headers = {"anthropic-beta": "token-efficient-tools-2025-02-19"}
-    except Exception as e:
-      logger.error(f"Anthropic client error: {e}")
+    except (TypeError, ValueError) as e:
+      logger.error(f"Anthropic client initialization error (invalid params): {e}")
+      clients["anthropic"] = None
+    except anthropic.AuthenticationError as e:
+      logger.error(f"Anthropic authentication error: {e}")
+      clients["anthropic"] = None
+    except anthropic.APIConnectionError as e:
+      logger.error(f"Anthropic connection error: {e}")
       clients["anthropic"] = None
   else:
     clients["anthropic"] = None
@@ -98,19 +138,24 @@ def initialize_clients(api_keys: dict[str, str]) -> dict[str, Any]:
   if api_keys["OPENAI_API_KEY"]:
     try:
       clients["openai"] = OpenAI(api_key=api_keys["OPENAI_API_KEY"])
-    except Exception as e:
-      logger.error(f"OpenAI client error: {e}")
+    except (TypeError, ValueError) as e:
+      logger.error(f"OpenAI client initialization error (invalid params): {e}")
+      clients["openai"] = None
+    except openai.AuthenticationError as e:
+      logger.error(f"OpenAI authentication error: {e}")
+      clients["openai"] = None
+    except openai.APIConnectionError as e:
+      logger.error(f"OpenAI connection error: {e}")
       clients["openai"] = None
   else:
     clients["openai"] = None
 
-  # Google client
+  # Google client - using new google-genai SDK
   if api_keys["GOOGLE_API_KEY"]:
     try:
-      genai.configure(api_key=api_keys["GOOGLE_API_KEY"])
-      clients["google"] = True  # Just a flag that it's configured
-    except Exception as e:
-      logger.error(f"Google API error: {e}")
+      clients["google"] = genai.Client(api_key=api_keys["GOOGLE_API_KEY"])
+    except (ValueError, TypeError, AttributeError) as e:
+      logger.error(f"Google client initialization error: {e}")
       clients["google"] = None
   else:
     clients["google"] = None
@@ -119,8 +164,11 @@ def initialize_clients(api_keys: dict[str, str]) -> dict[str, Any]:
   try:
     # Local Ollama client
     clients["ollama_local"] = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
-  except Exception as e:
-    logger.warning(f"Local Ollama client initialization error: {e}")
+  except (TypeError, ValueError) as e:
+    logger.warning(f"Local Ollama client initialization error (invalid params): {e}")
+    clients["ollama_local"] = None
+  except ConnectionError as e:
+    logger.warning(f"Local Ollama client connection error: {e}")
     clients["ollama_local"] = None
 
   # Remote Ollama client initialization
@@ -140,8 +188,11 @@ def initialize_clients(api_keys: dict[str, str]) -> dict[str, Any]:
       )
     else:
       clients["ollama"] = clients["ollama_local"]  # Fallback to local
-  except Exception as e:
-    logger.warning(f"Remote Ollama client initialization error: {e}")
+  except (TypeError, ValueError) as e:
+    logger.warning(f"Remote Ollama client initialization error (invalid params): {e}")
+    clients["ollama"] = clients["ollama_local"]  # Fallback to local
+  except ConnectionError as e:
+    logger.warning(f"Remote Ollama client connection error: {e}")
     clients["ollama"] = clients["ollama_local"]  # Fallback to local
 
   return clients
@@ -160,6 +211,9 @@ def query_anthropic(
   """
   Send a query to the Anthropic API and return the response.
 
+  Supports Claude 3.5, 3.7, and 4.x models with appropriate beta headers
+  for features like extended thinking and token-efficient tools.
+
   Args:
       client: Anthropic client object
       query_text: The user's query or prompt
@@ -167,14 +221,15 @@ def query_anthropic(
       model: The Anthropic Claude model name to use
       temperature: Sampling temperature (higher = more random)
       max_tokens: Maximum number of tokens in the response
-      conversation_messages: Optional list of previous messages from conversation history
+      conversation_messages: Optional list of previous messages for multi-turn
 
   Returns:
       The model's response as a string
 
   Raises:
-      ValueError: If the Anthropic API key is missing
-      Exception: If the API request fails
+      ValueError: If the Anthropic client is None (missing API key)
+      AuthenticationError: Invalid API key
+      APIError: Rate limit, bad request, connection, or other API errors
   """
   try:
     # Check if we have a valid client
@@ -216,26 +271,30 @@ def query_anthropic(
     )
 
     return message.content[0].text
-  except Exception as e:
-    logger.error(f"{model} query failed: {e}")
-    # Check for specific Anthropic exceptions
-    if hasattr(e, "status_code"):
-      if e.status_code == 401:
-        raise AuthenticationError(f"Invalid Anthropic API key for {model}")
-      elif e.status_code == 429:
-        raise APIError(f"Rate limit exceeded for {model}")
-      elif e.status_code >= 500:
-        raise APIError(f"Anthropic server error for {model}: {e}")
-
-    # Fallback for string matching (less reliable but necessary for some cases)
-    error_str = str(e).lower()
-    if "invalid_api_key" in error_str or "authentication" in error_str:
-      raise AuthenticationError(f"Authentication failed for {model}: Invalid/expired API key")
-    elif "rate limit" in error_str:
-      raise APIError(f"Rate limit exceeded for {model}")
-
-    # Re-raise as APIError with context
+  except ValueError:
+    # Re-raise ValueError (missing client) as-is
+    raise
+  except anthropic.AuthenticationError as e:
+    logger.error(f"{model} authentication failed: {e}")
+    raise AuthenticationError(f"Invalid Anthropic API key for {model}: {e}")
+  except anthropic.RateLimitError as e:
+    logger.error(f"{model} rate limit exceeded: {e}")
+    raise APIError(f"Rate limit exceeded for {model}: {e}")
+  except anthropic.BadRequestError as e:
+    logger.error(f"{model} bad request: {e}")
+    raise APIError(f"Bad request for {model}: {e}")
+  except anthropic.APIConnectionError as e:
+    logger.error(f"{model} connection error: {e}")
+    raise APIError(f"Connection error for {model}: {e}")
+  except anthropic.InternalServerError as e:
+    logger.error(f"{model} server error: {e}")
+    raise APIError(f"Anthropic server error for {model}: {e}")
+  except anthropic.APIStatusError as e:
+    logger.error(f"{model} API status error: {e}")
     raise APIError(f"Anthropic API error for {model}: {e}")
+  except (IndexError, AttributeError) as e:
+    logger.error(f"{model} response extraction error: {e}")
+    raise APIError(f"Invalid response format from {model}: {e}")
 
 
 # OpenAI model capability detection functions
@@ -403,21 +462,27 @@ def query_openai(
   """
   Send a query to the OpenAI API using the Responses API.
 
+  Supports GPT-4/5 and O-series reasoning models. Reasoning models (O1, O3, O4)
+  use configurable effort levels:
+  - O4 and chat models: "medium" effort (required by API)
+  - Other reasoning models: "minimal" effort (faster responses)
+
   Args:
       client: OpenAI client object
       query: The user's query or prompt
       system: System prompt that guides the model's behavior
       model: The OpenAI model name to use
-      temperature: Sampling temperature (higher = more random)
+      temperature: Sampling temperature (ignored for reasoning models)
       max_tokens: Maximum number of tokens in the response
-      conversation_messages: Optional list of previous messages from conversation history
+      conversation_messages: Optional list of previous messages for multi-turn
 
   Returns:
       The model's response as a string
 
   Raises:
-      ValueError: If the OpenAI API key is missing or invalid
-      Exception: If the API request fails
+      ValueError: If the OpenAI client is None
+      AuthenticationError: Invalid API key
+      APIError: Rate limit, bad request, connection, or server errors
   """
   try:
     # Check if we have a valid client
@@ -447,7 +512,9 @@ def query_openai(
     # Configure based on model type
     if is_reasoning_model:
       # Reasoning models configuration
-      if model_lower.startswith("o4"):
+      # O4 models and chat models (gpt-5.2-chat) require "medium" effort
+      # Other reasoning models can use "minimal" for faster responses
+      if model_lower.startswith("o4") or "chat" in model_lower:
         payload["reasoning"] = {"effort": "medium"}
         payload["text"] = {"verbosity": "medium"}
       else:
@@ -483,26 +550,29 @@ def query_openai(
 
     return content
 
-  except Exception as e:
-    logger.error(f"Error querying {model}: {e}")
-    # Check for specific OpenAI exceptions
-    if hasattr(e, "status_code"):
-      if e.status_code == 401:
-        raise AuthenticationError(f"Invalid OpenAI API key for {model}")
-      elif e.status_code == 429:
-        raise APIError(f"Rate limit exceeded for {model}")
-      elif e.status_code >= 500:
-        raise APIError(f"OpenAI server error for {model}: {e}")
-
-    # Fallback for string matching
-    error_str = str(e).lower()
-    if "invalid_api_key" in error_str or "authentication" in error_str:
-      raise AuthenticationError(f"Authentication failed for {model}: Invalid/expired OpenAI API key")
-    elif "rate limit" in error_str:
-      raise APIError(f"Rate limit exceeded for {model}")
-
-    # Re-raise as APIError with context
+  except ValueError:
+    # Re-raise ValueError (missing client) as-is
+    raise
+  except openai.AuthenticationError as e:
+    logger.error(f"{model} authentication failed: {e}")
+    raise AuthenticationError(f"Invalid OpenAI API key for {model}: {e}")
+  except openai.RateLimitError as e:
+    logger.error(f"{model} rate limit exceeded: {e}")
+    raise APIError(f"Rate limit exceeded for {model}: {e}")
+  except openai.BadRequestError as e:
+    logger.error(f"{model} bad request: {e}")
+    raise APIError(f"Bad request for {model}: {e}")
+  except openai.APIConnectionError as e:
+    logger.error(f"{model} connection error: {e}")
+    raise APIError(f"Connection error for {model}: {e}")
+  except openai.APIStatusError as e:
+    logger.error(f"{model} API status error (status {e.status_code}): {e}")
+    if e.status_code >= 500:
+      raise APIError(f"OpenAI server error for {model}: {e}")
     raise APIError(f"OpenAI API error for {model}: {e}")
+  except (AttributeError, KeyError, IndexError) as e:
+    logger.error(f"{model} response extraction error: {e}")
+    raise APIError(f"Invalid response format from {model}: {e}")
 
 
 def prepare_llama_messages(query_text: str, systemprompt: str, conversation_messages: list[dict[str, str]] = None) -> list[dict[str, str]]:
@@ -731,10 +801,15 @@ def query_llama(
     # Process response
     return process_llama_response(response, model)
 
-  except Exception as e:
-    # Error has already been logged, just pass it up
-    logger.error(f"{model} query failed: {e}")
-    raise
+  except ValueError as e:
+    logger.error(f"{model} query failed (invalid parameters): {e}")
+    raise APIError(f"Ollama query error for {model}: {e}")
+  except requests.RequestException as e:
+    logger.error(f"{model} query failed (connection error): {e}")
+    raise APIError(f"Ollama connection error for {model}: {e}")
+  except json.JSONDecodeError as e:
+    logger.error(f"{model} query failed (invalid JSON response): {e}")
+    raise APIError(f"Ollama response parsing error for {model}: {e}")
 
 
 def _parse_streaming_response(response_text: str) -> str:
@@ -790,7 +865,8 @@ def _run_gemini_query_in_process(query_data):
   Execute Gemini query in a separate process to isolate GRPC warnings.
 
   This function runs in an isolated subprocess and handles the Gemini API
-  interactions. Redirects stderr to suppress all GRPC-related warnings.
+  interactions using the new google-genai SDK. Redirects stderr to suppress
+  all GRPC-related warnings.
 
   Args:
       query_data: Tuple containing (query, system, model, temperature,
@@ -799,7 +875,6 @@ def _run_gemini_query_in_process(query_data):
   Returns:
       The response text or error message prefixed with "ERROR:"
   """
-  import logging
   import os
   import sys
 
@@ -811,47 +886,67 @@ def _run_gemini_query_in_process(query_data):
   # Unpack arguments
   query, system, model, temperature, max_tokens, api_key, conversation_messages = query_data
 
-  # Import the genai module in this process
-  import google.generativeai as genai
+  # Import the new google-genai SDK in this process
+  from google import genai
+  from google.genai import types
 
   try:
-    # Configure the API
-    genai.configure(api_key=api_key)
+    # Create client with API key
+    client = genai.Client(api_key=api_key)
 
-    # Set up generation parameters with 2025 improvements
-    gen_config = genai.types.GenerationConfig(
+    # Set up generation config with 2025 improvements
+    gen_config = types.GenerateContentConfig(
       temperature=temperature,
       max_output_tokens=max_tokens,
       # Use updated top_p for better performance (2025 optimization)
       top_p=0.95 if temperature > 0 else None,
     )
 
-    # Initialize model and get response based on whether we have conversation history
+    # Build contents for the query
     if conversation_messages and len(conversation_messages) > 0:
-      # Create chat session with history
-      model_obj = genai.GenerativeModel(model, generation_config=gen_config)
-      chat = model_obj.start_chat(history=[])
+      # Build message history for conversation mode
+      contents = []
 
-      # Add system prompt
-      system_prompt = f"<s>\n{system}\n</s>"
-      chat.send_message(system_prompt)
+      # Add system prompt as first user message
+      contents.append(types.Content(
+        role="user",
+        parts=[types.Part(text=f"<s>\n{system}\n</s>")]
+      ))
+
+      # Add model acknowledgment
+      contents.append(types.Content(
+        role="model",
+        parts=[types.Part(text="Understood. I will follow these instructions.")]
+      ))
 
       # Add conversation history
       for msg in conversation_messages:
-        if msg["role"] == "user":
-          chat.send_message(msg["content"])
-        elif msg["role"] == "assistant":
-          # Add assistant messages to history
-          history = chat.history
-          history.append({"role": "model", "parts": [{"text": msg["content"]}]})
+        role = "user" if msg["role"] == "user" else "model"
+        contents.append(types.Content(
+          role=role,
+          parts=[types.Part(text=msg["content"])]
+        ))
 
-      # Send current query
-      response = chat.send_message(query)
+      # Add current query
+      contents.append(types.Content(
+        role="user",
+        parts=[types.Part(text=query)]
+      ))
+
+      # Generate response with history
+      response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=gen_config,
+      )
     else:
       # Simple query without conversation
       prompt = f"<s>\n{system}\n</s>\n\n{query}"
-      model_obj = genai.GenerativeModel(model, generation_config=gen_config)
-      response = model_obj.generate_content(prompt)
+      response = client.models.generate_content(
+        model=model,
+        contents=prompt,
+        config=gen_config,
+      )
 
     # Extract response text with multiple fallback options
     result = ""
@@ -861,14 +956,18 @@ def _run_gemini_query_in_process(query_data):
         result = response.text
       elif hasattr(response, "candidates") and response.candidates:
         if hasattr(response.candidates[0], "content"):
-          result = response.candidates[0].content
+          content = response.candidates[0].content
+          if hasattr(content, "parts") and content.parts:
+            result = content.parts[0].text
+          else:
+            result = str(content)
         elif hasattr(response.candidates[0], "parts"):
           result = response.candidates[0].parts[0].text
         else:
           result = str(response.candidates[0])
       else:
         result = str(response)
-    except Exception:
+    except (AttributeError, IndexError, TypeError):
       # Last resort: convert to string
       result = str(response.candidates[0]) if hasattr(response, "candidates") and response.candidates else str(response)
 
@@ -956,8 +1055,9 @@ def get_available_gemini_models(api_key: str) -> list[str]:
   """
   Retrieve a list of available text-based Gemini models from the Google API.
 
-  Filters out models that are not suitable for text generation, including embedding
-  models and other excluded model types.
+  Uses the new google-genai SDK to list available models. Filters out models
+  that are not suitable for text generation, including embedding models and
+  other excluded model types.
 
   Args:
       api_key: Google API key
@@ -972,8 +1072,9 @@ def get_available_gemini_models(api_key: str) -> list[str]:
     return []
 
   try:
-    genai.configure(api_key=api_key)
-    available_models = genai.list_models()
+    # Use new google-genai SDK
+    client = genai.Client(api_key=api_key)
+    available_models = client.models.list()
     excluded_models = [
       "models/aqa",
       "models/chat-bison-001",

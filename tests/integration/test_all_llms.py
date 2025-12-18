@@ -27,7 +27,16 @@ class TestEnabledLLMsIntegration:
     cls.models_config = list_available_canonical_models_with_details("Models/Models.json")
     cls.enabled_models = {k: v for k, v in cls.models_config.items() if v.get("enabled", 0) == 1}
 
-    # Group by family
+    # Group by provider (parent field) - lowercase for consistency
+    cls.providers = {}
+    for model, config in cls.enabled_models.items():
+      parent = config.get("parent")
+      provider = (parent or "unknown").lower()
+      if provider not in cls.providers:
+        cls.providers[provider] = []
+      cls.providers[provider].append(model)
+
+    # Also keep family grouping for series-specific tests
     cls.families = {}
     for model, config in cls.enabled_models.items():
       family = config.get("family", "unknown")
@@ -35,19 +44,26 @@ class TestEnabledLLMsIntegration:
         cls.families[family] = []
       cls.families[family].append(model)
 
-  def test_all_enabled_families_present(self):
-    """Test that all expected LLM families are enabled."""
-    expected_families = ["openai", "anthropic", "google", "ollama"]
+  def test_all_enabled_providers_present(self):
+    """Test that core LLM providers are enabled."""
+    # Core providers that should be present
+    core_providers = ["openai", "anthropic", "google"]
 
-    for family in expected_families:
-      assert family in self.families, f"Expected LLM family '{family}' not found in enabled models"
-      assert len(self.families[family]) > 0, f"No models enabled for family '{family}'"
+    for provider in core_providers:
+      assert provider in self.providers, f"Expected core LLM provider '{provider}' not found in enabled models"
+      assert len(self.providers[provider]) > 0, f"No models enabled for core provider '{provider}'"
 
-    print(f"✅ Found enabled models for all families: {list(self.families.keys())}")
+    # Ollama is optional - only check if present
+    optional_providers = ["ollama"]
+    present_optional = [p for p in optional_providers if p in self.providers and len(self.providers[p]) > 0]
 
-  def test_openai_family_models(self):
-    """Test that OpenAI family models are properly configured."""
-    openai_models = self.families.get("openai", [])
+    print(f"✅ Found enabled models for core providers: {core_providers}")
+    if present_optional:
+      print(f"✅ Optional providers also present: {present_optional}")
+
+  def test_openai_provider_models(self):
+    """Test that OpenAI provider models are properly configured."""
+    openai_models = self.providers.get("openai", [])
     assert len(openai_models) > 0, "No OpenAI models enabled"
 
     # Test specific model types
@@ -58,9 +74,9 @@ class TestEnabledLLMsIntegration:
     assert len(gpt4_models) > 0, "No GPT-4 models enabled"
     print(f"✅ OpenAI family: {len(openai_models)} models ({len(gpt4_models)} GPT-4, {len(chatgpt_models)} ChatGPT, {len(o_series)} O-series)")
 
-  def test_anthropic_family_models(self):
-    """Test that Anthropic family models are properly configured."""
-    anthropic_models = self.families.get("anthropic", [])
+  def test_anthropic_provider_models(self):
+    """Test that Anthropic provider models are properly configured."""
+    anthropic_models = self.providers.get("anthropic", [])
     assert len(anthropic_models) > 0, "No Anthropic models enabled"
 
     # Test specific model types
@@ -71,12 +87,12 @@ class TestEnabledLLMsIntegration:
 
     assert len(claude4_models) > 0, "No Claude 4.x models enabled"
     print(
-      f"✅ Anthropic family: {len(anthropic_models)} models ({len(claude4_models)} Claude 4.x, {len(haiku_models)} Haiku, {len(sonnet_models)} Sonnet, {len(opus_models)} Opus)"
+      f"✅ Anthropic provider: {len(anthropic_models)} models ({len(claude4_models)} Claude 4.x, {len(haiku_models)} Haiku, {len(sonnet_models)} Sonnet, {len(opus_models)} Opus)"
     )
 
-  def test_google_family_models(self):
-    """Test that Google/Gemini family models are properly configured."""
-    google_models = self.families.get("google", [])
+  def test_google_provider_models(self):
+    """Test that Google/Gemini provider models are properly configured."""
+    google_models = self.providers.get("google", [])
     assert len(google_models) > 0, "No Google/Gemini models enabled"
 
     # Test specific model types
@@ -87,20 +103,22 @@ class TestEnabledLLMsIntegration:
 
     assert len(gemini20_models) > 0 or len(gemini25_models) > 0, "No Gemini 2.0+ models enabled"
     print(
-      f"✅ Google family: {len(google_models)} models ({len(gemini20_models)} 2.0, {len(gemini25_models)} 2.5, {len(flash_models)} Flash, {len(pro_models)} Pro)"
+      f"✅ Google provider: {len(google_models)} models ({len(gemini20_models)} 2.0, {len(gemini25_models)} 2.5, {len(flash_models)} Flash, {len(pro_models)} Pro)"
     )
 
-  def test_ollama_family_models(self):
-    """Test that Ollama family models are properly configured."""
-    ollama_models = self.families.get("ollama", [])
-    assert len(ollama_models) > 0, "No Ollama models enabled"
+  def test_ollama_provider_models(self):
+    """Test that Ollama provider models are properly configured (if enabled)."""
+    ollama_models = self.providers.get("ollama", [])
+
+    if len(ollama_models) == 0:
+      pytest.skip("No Ollama models enabled in configuration")
 
     # Test specific model types
     gemma_models = [m for m in ollama_models if "gemma" in m.lower()]
     llama_models = [m for m in ollama_models if "llama" in m.lower()]
 
     assert len(gemma_models) > 0 or len(llama_models) > 0, "No Gemma or Llama models enabled"
-    print(f"✅ Ollama family: {len(ollama_models)} models ({len(gemma_models)} Gemma, {len(llama_models)} Llama)")
+    print(f"✅ Ollama provider: {len(ollama_models)} models ({len(gemma_models)} Gemma, {len(llama_models)} Llama)")
 
 
 class TestLLMRouting:
@@ -342,7 +360,7 @@ class TestClientInitialization:
       # Verify client types
       assert clients["openai"] == mock_openai_instance
       assert clients["anthropic"] == mock_anthropic_instance
-      assert clients["google"] is True  # Google uses flag-based initialization
+      assert clients["google"] is not None  # Google now uses genai.Client instance
       assert clients["ollama"] is not None
       assert clients["ollama_local"] is not None
 

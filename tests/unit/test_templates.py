@@ -4,10 +4,8 @@ Unit tests for template handling in dejavu2-cli.
 
 import json
 import os
-
-# Import functions from the application
 import sys
-from unittest.mock import mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
@@ -19,6 +17,13 @@ from templates import get_template, list_template_names, list_templates, load_te
 class TestTemplates:
   """Test template handling functionality."""
 
+  def setup_method(self):
+    """Clear module-level cache before each test."""
+    import templates
+
+    templates._templates_cache.clear()
+    templates._cache_mtime.clear()
+
   def test_load_template_data(self):
     """Test loading template data from a mock JSON file."""
     mock_templates = {
@@ -28,7 +33,7 @@ class TestTemplates:
 
     mock_json = json.dumps(mock_templates)
 
-    with patch("builtins.open", mock_open(read_data=mock_json)), patch("os.path.exists", return_value=True):
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
       templates = load_template_data("dummy_path.json")
 
       assert "Template 1" in templates
@@ -38,13 +43,23 @@ class TestTemplates:
 
   def test_load_template_data_file_not_found(self):
     """Test loading templates when the JSON file doesn't exist."""
-    with patch("os.path.exists", return_value=False), pytest.raises(ConfigurationError):
+    with patch("os.path.exists", return_value=False), pytest.raises(ConfigurationError, match="Template file not found"):
       load_template_data("nonexistent.json")
 
   def test_load_template_data_invalid_json(self):
     """Test loading templates with invalid JSON content."""
-    with patch("builtins.open", mock_open(read_data='{"invalid": json')), patch("os.path.exists", return_value=True):
-      with pytest.raises(TemplateError):
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=1234567890.0), patch(
+      "builtins.open", mock_open(read_data='{"invalid": json')
+    ):
+      with pytest.raises(TemplateError, match="Invalid JSON"):
+        load_template_data("invalid.json")
+
+  def test_load_template_data_invalid_format(self):
+    """Test loading templates with invalid format (not a dict)."""
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=1234567890.0), patch(
+      "builtins.open", mock_open(read_data='["list", "not", "dict"]')
+    ):
+      with pytest.raises(TemplateError, match="Invalid template format"):
         load_template_data("invalid.json")
 
   def test_get_template_exact_match(self):
@@ -82,7 +97,7 @@ class TestTemplates:
     """Test getting a template that doesn't exist."""
     mock_templates = {"Template 1": {"category": "General"}}
 
-    with patch("templates.load_template_data", return_value=mock_templates), pytest.raises(TemplateError):
+    with patch("templates.load_template_data", return_value=mock_templates), pytest.raises(TemplateError, match="not found"):
       get_template("NonExistent", "dummy_path.json")
 
   def test_list_template_names(self):
@@ -111,6 +126,94 @@ class TestTemplates:
       list_templates("dummy_path.json", "Template 1")
       # Should have called write with specific template details
       assert mock_write.called
+
+  def test_load_template_data_caching(self):
+    """Test that templates are cached and cache is invalidated on file change."""
+    mock_templates = {"Template 1": {"category": "General"}}
+    mock_json = json.dumps(mock_templates)
+
+    # First load - should read from file
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=1234567890.0), patch(
+      "builtins.open", mock_open(read_data=mock_json)
+    ) as mock_file:
+      result1 = load_template_data("test.json")
+      assert mock_file.called
+      assert "Template 1" in result1
+
+    # Second load with same mtime - should use cache
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=1234567890.0), patch(
+      "builtins.open", mock_open(read_data=mock_json)
+    ) as mock_file:
+      result2 = load_template_data("test.json")
+      # File should not be opened again due to cache
+      assert not mock_file.called
+      assert result2 == result1
+
+    # Third load with different mtime - should reload
+    updated_templates = {"Template 1": {"category": "General"}, "Template 2": {"category": "Code"}}
+    updated_json = json.dumps(updated_templates)
+
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=9999999999.0), patch(
+      "builtins.open", mock_open(read_data=updated_json)
+    ) as mock_file:
+      result3 = load_template_data("test.json")
+      assert mock_file.called
+      assert "Template 2" in result3
+
+  def test_load_template_data_force_reload(self):
+    """Test force_reload bypasses cache."""
+    mock_templates = {"Template 1": {"category": "General"}}
+    mock_json = json.dumps(mock_templates)
+
+    # First load
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=1234567890.0), patch(
+      "builtins.open", mock_open(read_data=mock_json)
+    ):
+      load_template_data("test.json")
+
+    # Force reload should read from file again
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", return_value=1234567890.0), patch(
+      "builtins.open", mock_open(read_data=mock_json)
+    ) as mock_file:
+      load_template_data("test.json", force_reload=True)
+      assert mock_file.called
+
+  def test_get_template_case_insensitive(self):
+    """Test case-insensitive template matching."""
+    mock_templates = {"My Template": {"category": "General"}}
+
+    with patch("templates.load_template_data", return_value=mock_templates):
+      # Test lowercase
+      result = get_template("my template", "dummy.json")
+      assert result is not None
+      key, _ = result
+      assert key == "My Template"
+
+  def test_get_template_normalized_match(self):
+    """Test normalized template matching (matches on part before '-')."""
+    mock_templates = {
+      "Dejavu2 - Helpful AI": {"category": "General", "model": "gpt-4o"},
+      "CodeHelper - Expert": {"category": "Code", "model": "claude-3-5-sonnet"},
+    }
+
+    with patch("templates.load_template_data", return_value=mock_templates):
+      # Match by normalized key (part before '-', lowercased, no spaces)
+      result = get_template("dejavu2", "dummy.json")
+      assert result is not None
+      key, template = result
+      assert key == "Dejavu2 - Helpful AI"
+
+      # Match by substring in normalized key
+      result = get_template("code", "dummy.json")
+      assert result is not None
+      key, template = result
+      assert key == "CodeHelper - Expert"
+
+  def test_load_template_data_oserror(self):
+    """Test handling of OSError when loading templates."""
+    with patch("os.path.exists", return_value=True), patch("os.path.getmtime", side_effect=OSError("Permission denied")):
+      with pytest.raises(ConfigurationError, match="Error reading template file"):
+        load_template_data("permission_denied.json")
 
 
 # fin

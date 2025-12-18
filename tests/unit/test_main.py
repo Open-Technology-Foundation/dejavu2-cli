@@ -35,12 +35,12 @@ class TestMain:
     assert result.exit_code == 0
     assert "dejavu2-cli" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
-  @patch("main.get_canonical_model")
-  @patch("main.get_api_keys")
-  @patch("main.initialize_clients")
-  @patch("main.query")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
+  @patch("models.get_canonical_model")
+  @patch("llm_clients.get_api_keys")
+  @patch("llm_clients.initialize_clients")
+  @patch("llm_clients.query")
   def test_main_simple_query(self, mock_query, mock_init_clients, mock_get_keys, mock_get_model, mock_conv_manager, mock_load_config):
     """Test a simple query execution."""
     # Setup mocks
@@ -65,8 +65,8 @@ class TestMain:
     assert result.exit_code == 0
     assert mock_query.called
 
-  @patch("main.load_config")
-  @patch("main.list_models")
+  @patch("config.load_config")
+  @patch("models.list_models")
   def test_main_list_models(self, mock_list_models, mock_load_config):
     """Test listing models."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -77,8 +77,8 @@ class TestMain:
     assert result.exit_code == 0
     mock_list_models.assert_called_once()
 
-  @patch("main.load_config")
-  @patch("main.list_templates")
+  @patch("config.load_config")
+  @patch("templates.list_templates")
   def test_main_list_templates(self, mock_list_templates, mock_load_config):
     """Test listing templates."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -89,8 +89,8 @@ class TestMain:
     assert result.exit_code == 0
     mock_list_templates.assert_called_once_with(os.path.join(main.SCRIPT_DIR, "Agents.json"), "all")
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_list_conversations(self, mock_conv_manager, mock_load_config):
     """Test listing conversations."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -105,8 +105,8 @@ class TestMain:
     assert result.exit_code == 0
     assert "No saved conversations found." in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_delete_conversation(self, mock_conv_manager, mock_load_config):
     """Test deleting a conversation."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -121,12 +121,12 @@ class TestMain:
     assert result.exit_code == 0
     assert "Conversation test-id deleted." in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
-  @patch("main.get_canonical_model")
-  @patch("main.get_api_keys")
-  @patch("main.initialize_clients")
-  @patch("main.display_status")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
+  @patch("models.get_canonical_model")
+  @patch("llm_clients.get_api_keys")
+  @patch("llm_clients.initialize_clients")
+  @patch("display.display_status")
   def test_main_status(self, mock_display, mock_init_clients, mock_get_keys, mock_get_model, mock_conv_manager, mock_load_config):
     """Test status display."""
     # Setup mocks
@@ -149,13 +149,13 @@ class TestMain:
     assert result.exit_code == 0
     mock_display.assert_called_once()
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
-  @patch("main.get_template")
-  @patch("main.get_canonical_model")
-  @patch("main.get_api_keys")
-  @patch("main.initialize_clients")
-  @patch("main.query")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
+  @patch("templates.get_template")
+  @patch("models.get_canonical_model")
+  @patch("llm_clients.get_api_keys")
+  @patch("llm_clients.initialize_clients")
+  @patch("llm_clients.query")
   def test_main_with_template(
     self, mock_query, mock_init_clients, mock_get_keys, mock_get_model, mock_get_template, mock_conv_manager, mock_load_config
   ):
@@ -191,13 +191,13 @@ class TestMain:
     mock_get_template.assert_called_once()
     mock_query.assert_called_once()
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
-  @patch("main.get_canonical_model")
-  @patch("main.get_api_keys")
-  @patch("main.initialize_clients")
-  @patch("main.get_reference_string")
-  @patch("main.query")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
+  @patch("models.get_canonical_model")
+  @patch("llm_clients.get_api_keys")
+  @patch("llm_clients.initialize_clients")
+  @patch("context.get_reference_string")
+  @patch("llm_clients.query")
   def test_main_with_reference(self, mock_query, mock_get_ref, mock_init_clients, mock_get_keys, mock_get_model, mock_conv_manager, mock_load_config):
     """Test query with reference files."""
     # Setup mocks
@@ -224,8 +224,8 @@ class TestMain:
     mock_get_ref.assert_called_once_with("test.txt")
     mock_query.assert_called_once()
 
-  @patch("main.load_config")
-  @patch("main.get_canonical_model")
+  @patch("config.load_config")
+  @patch("models.get_canonical_model")
   def test_main_invalid_model(self, mock_get_model, mock_load_config):
     """Test behavior with invalid model."""
     mock_load_config.return_value = {
@@ -250,8 +250,8 @@ class TestMain:
     assert result.exit_code == 1
     assert "Require at least one query" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_export_conversation(self, mock_conv_manager, mock_load_config):
     """Test exporting a conversation."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -266,12 +266,12 @@ class TestMain:
     assert result.exit_code == 0
     assert "# Conversation" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
-  @patch("main.get_canonical_model")
-  @patch("main.get_api_keys")
-  @patch("main.initialize_clients")
-  @patch("main.query")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
+  @patch("models.get_canonical_model")
+  @patch("llm_clients.get_api_keys")
+  @patch("llm_clients.initialize_clients")
+  @patch("llm_clients.query")
   def test_main_continue_conversation(self, mock_query, mock_init_clients, mock_get_keys, mock_get_model, mock_conv_manager, mock_load_config):
     """Test continuing an existing conversation."""
     # Setup mocks
@@ -302,8 +302,8 @@ class TestMain:
     mock_conv_manager_instance.get_most_recent_conversation.assert_called_once()
     mock_query.assert_called_once()
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_continue_no_previous_conversations(self, mock_conv_manager, mock_load_config):
     """Test continuing when no previous conversations exist."""
     mock_load_config.return_value = {
@@ -322,8 +322,8 @@ class TestMain:
     # Should still proceed but print a warning
     assert "No previous conversations found to continue" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_conversation_not_found(self, mock_conv_manager, mock_load_config):
     """Test loading a non-existent conversation by ID."""
     mock_load_config.return_value = {
@@ -342,8 +342,8 @@ class TestMain:
     assert result.exit_code == 1
     assert "Conversation nonexistent-id not found" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_delete_conversation_not_found(self, mock_conv_manager, mock_load_config):
     """Test deleting a conversation that doesn't exist."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -358,8 +358,8 @@ class TestMain:
     assert result.exit_code == 0
     assert "Conversation nonexistent-id not found" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_export_conversation_no_conversations(self, mock_conv_manager, mock_load_config):
     """Test exporting when no conversations exist."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -375,8 +375,8 @@ class TestMain:
     assert result.exit_code == 0
     assert "No conversations found to export" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_export_conversation_error(self, mock_conv_manager, mock_load_config):
     """Test export conversation with error."""
     from errors import ConversationError
@@ -393,8 +393,8 @@ class TestMain:
     assert result.exit_code == 1
     assert "Conversation error: Export failed" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_remove_message(self, mock_conv_manager, mock_load_config):
     """Test removing a specific message from conversation."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -408,8 +408,8 @@ class TestMain:
     assert result.exit_code == 0
     mock_conv_manager_instance.remove_message_at_index.assert_called_once_with("test-conv-id", 5)
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_remove_message_error(self, mock_conv_manager, mock_load_config):
     """Test removing a message with error."""
     from errors import ConversationError
@@ -426,8 +426,8 @@ class TestMain:
     assert result.exit_code == 0
     assert "Conversation error: Message not found" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_remove_pair(self, mock_conv_manager, mock_load_config):
     """Test removing a message pair from conversation."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -441,9 +441,9 @@ class TestMain:
     assert result.exit_code == 0
     mock_conv_manager_instance.remove_message_pair.assert_called_once_with("test-conv-id", 4)
 
-  @patch("main.load_config")
-  @patch("main.get_template")
-  @patch("main.get_canonical_model")
+  @patch("config.load_config")
+  @patch("templates.get_template")
+  @patch("models.get_canonical_model")
   def test_main_template_error(self, mock_get_model, mock_get_template, mock_load_config):
     """Test template error handling."""
     from errors import TemplateError
@@ -461,8 +461,8 @@ class TestMain:
     assert result.exit_code == 1
     assert "Template error: Template not found" in result.output
 
-  @patch("main.load_config")
-  @patch("main.get_canonical_model")
+  @patch("config.load_config")
+  @patch("models.get_canonical_model")
   def test_main_model_error(self, mock_get_model, mock_load_config):
     """Test model error handling."""
     from errors import ModelError
@@ -480,13 +480,13 @@ class TestMain:
     assert result.exit_code == 1
     assert "Model error: Model not found" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
-  @patch("main.get_canonical_model")
-  @patch("main.get_api_keys")
-  @patch("main.initialize_clients")
-  @patch("main.get_reference_string")
-  @patch("main.query")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
+  @patch("models.get_canonical_model")
+  @patch("llm_clients.get_api_keys")
+  @patch("llm_clients.initialize_clients")
+  @patch("context.get_reference_string")
+  @patch("llm_clients.query")
   def test_main_reference_error(self, mock_query, mock_get_ref, mock_init_clients, mock_get_keys, mock_get_model, mock_conv_manager, mock_load_config):
     """Test reference file error handling."""
     from errors import ReferenceError
@@ -505,13 +505,13 @@ class TestMain:
     assert result.exit_code == 1
     assert "Reference error: Cannot read reference file" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
-  @patch("main.get_canonical_model")
-  @patch("main.get_api_keys")
-  @patch("main.initialize_clients")
-  @patch("main.get_knowledgebase_string")
-  @patch("main.query")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
+  @patch("models.get_canonical_model")
+  @patch("llm_clients.get_api_keys")
+  @patch("llm_clients.initialize_clients")
+  @patch("context.get_knowledgebase_string")
+  @patch("llm_clients.query")
   def test_main_knowledgebase_error(
     self, mock_query, mock_get_kb, mock_init_clients, mock_get_keys, mock_get_model, mock_conv_manager, mock_load_config
   ):
@@ -532,8 +532,8 @@ class TestMain:
     assert result.exit_code == 1
     assert "Knowledgebase error: Knowledgebase not found" in result.output
 
-  @patch("main.load_config")
-  @patch("main.list_knowledge_bases")
+  @patch("config.load_config")
+  @patch("context.list_knowledge_bases")
   def test_main_list_knowledge_bases_error(self, mock_list_kb, mock_load_config):
     """Test knowledge base listing error handling."""
     from errors import KnowledgeBaseError
@@ -547,8 +547,8 @@ class TestMain:
     assert result.exit_code == 1
     assert "Knowledgebase error: Directory not valid" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_list_messages(self, mock_conv_manager, mock_load_config):
     """Test listing messages in a conversation."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}
@@ -575,8 +575,8 @@ class TestMain:
     assert "Hello there" in result.output
     assert "Hi! How can I help?" in result.output
 
-  @patch("main.load_config")
-  @patch("main.ConversationManager")
+  @patch("config.load_config")
+  @patch("conversations.ConversationManager")
   def test_main_list_conversations_with_data(self, mock_conv_manager, mock_load_config):
     """Test listing conversations with formatted dates."""
     mock_load_config.return_value = {"defaults": {"model": "gpt-4o"}, "paths": {"template_path": "Agents.json"}}

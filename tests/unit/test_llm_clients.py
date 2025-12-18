@@ -2,6 +2,14 @@
 Unit tests for LLM client functionality in dejavu2-cli.
 
 Tests all enabled LLM providers: OpenAI, Anthropic, Google/Gemini, and Ollama.
+
+Test Classes:
+- TestLLMClients: Core client initialization and API key handling
+- TestQueryFunctions: Provider-specific query functions and response handling
+- TestOpenAIModelCapabilities: Model capability detection (_is_reasoning_model, etc.)
+- TestResponsesAPIFormatting: Responses API message formatting
+- TestSpecificExceptionHandlers: SDK-specific exception handling (AuthenticationError, etc.)
+- TestGoogleSDKMigration: google-genai SDK client patterns and model listing
 """
 
 import os
@@ -94,8 +102,8 @@ class TestLLMClients:
     }
 
     with patch("llm_clients.OpenAI"), patch("llm_clients.Anthropic") as mock_anthropic, patch("llm_clients.genai"):
-      # Make Anthropic raise an exception
-      mock_anthropic.side_effect = Exception("Invalid API key")
+      # Make Anthropic raise a TypeError (one of the specific exceptions now handled)
+      mock_anthropic.side_effect = TypeError("Invalid API key")
 
       clients = initialize_clients(api_keys)
 
@@ -112,8 +120,8 @@ class TestLLMClients:
     }
 
     with patch("llm_clients.OpenAI") as mock_openai, patch("llm_clients.Anthropic"), patch("llm_clients.genai"):
-      # Make OpenAI raise an exception
-      mock_openai.side_effect = Exception("Invalid API key")
+      # Make OpenAI raise a TypeError (one of the specific exceptions now handled)
+      mock_openai.side_effect = TypeError("Invalid API key")
 
       clients = initialize_clients(api_keys)
 
@@ -130,8 +138,8 @@ class TestLLMClients:
     }
 
     with patch("llm_clients.OpenAI"), patch("llm_clients.Anthropic"), patch("llm_clients.genai") as mock_genai:
-      # Make genai.configure raise an exception
-      mock_genai.configure.side_effect = Exception("Invalid API key")
+      # Make genai.Client() raise a ValueError (one of the specific exceptions now handled)
+      mock_genai.Client.side_effect = ValueError("Invalid API key")
 
       clients = initialize_clients(api_keys)
 
@@ -292,14 +300,18 @@ class TestOpenAIProvider:
   @patch("llm_clients.OpenAI")
   def test_query_openai_auth_error_path(self, mock_openai_class):
     """Test OpenAI authentication error path."""
+    import openai
+
     from errors import AuthenticationError
 
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
 
-    # Simulate authentication error with status code
-    error = Exception("Invalid API key")
-    error.status_code = 401
+    # Create a proper OpenAI authentication error
+    mock_response = MagicMock()
+    mock_response.status_code = 401
+    mock_response.headers = {}
+    error = openai.AuthenticationError("Invalid API key", response=mock_response, body=None)
     mock_client.responses.create.side_effect = error
 
     with pytest.raises(AuthenticationError, match="Invalid OpenAI API key"):
@@ -308,14 +320,18 @@ class TestOpenAIProvider:
   @patch("llm_clients.OpenAI")
   def test_query_openai_rate_limit_path(self, mock_openai_class):
     """Test OpenAI rate limit error path."""
+    import openai
+
     from errors import APIError
 
     mock_client = MagicMock()
     mock_openai_class.return_value = mock_client
 
-    # Simulate rate limit error
-    error = Exception("Rate limit exceeded")
-    error.status_code = 429
+    # Create a proper OpenAI rate limit error
+    mock_response = MagicMock()
+    mock_response.status_code = 429
+    mock_response.headers = {}
+    error = openai.RateLimitError("Rate limit exceeded", response=mock_response, body=None)
     mock_client.responses.create.side_effect = error
 
     with pytest.raises(APIError, match="Rate limit exceeded"):
@@ -414,7 +430,7 @@ class TestAnthropicProvider:
 
 
 class TestGoogleGeminiProvider:
-  """Test Google/Gemini family LLMs."""
+  """Test Google/Gemini family LLMs with new google-genai SDK."""
 
   @patch("multiprocessing.get_context")
   def test_query_gemini_success(self, mock_get_context):
@@ -525,7 +541,10 @@ class TestGoogleGeminiProvider:
     mock_deprecated = MagicMock()
     mock_deprecated.name = "models/gemini-1.5-pro-001"
 
-    mock_genai.list_models.return_value = [mock_model1, mock_model2, mock_embedding, mock_deprecated]
+    # Mock the Client class and its models.list() method (new google-genai SDK)
+    mock_client = MagicMock()
+    mock_client.models.list.return_value = [mock_model1, mock_model2, mock_embedding, mock_deprecated]
+    mock_genai.Client.return_value = mock_client
 
     result = get_available_gemini_models("test-api-key")
 
@@ -541,13 +560,122 @@ class TestGoogleGeminiProvider:
     """Test Gemini model list retrieval failure."""
     from llm_clients import get_available_gemini_models
 
-    # Simulate API error
-    mock_genai.list_models.side_effect = Exception("API error")
+    # Simulate API error (new google-genai SDK uses Client)
+    mock_genai.Client.side_effect = Exception("API error")
 
     result = get_available_gemini_models("test-api-key")
 
     # Should return empty list on error
     assert result == []
+
+  @patch("multiprocessing.get_context")
+  def test_query_gemini_with_conversation_history(self, mock_get_context):
+    """Test Gemini query with conversation history passes messages to subprocess."""
+    mock_ctx = MagicMock()
+    mock_pool = MagicMock()
+    mock_pool.apply.return_value = "Gemini response with context"
+    mock_ctx.Pool.return_value.__enter__ = MagicMock(return_value=mock_pool)
+    mock_ctx.Pool.return_value.__exit__ = MagicMock(return_value=None)
+    mock_get_context.return_value = mock_ctx
+
+    conversation_history = [
+      {"role": "user", "content": "Hello"},
+      {"role": "assistant", "content": "Hi there!"},
+      {"role": "user", "content": "What's the weather?"},
+    ]
+
+    result = query_gemini(
+      query="Tell me more",
+      system="You are helpful",
+      model="gemini-2.0-flash",
+      temperature=0.5,
+      max_tokens=2000,
+      api_key="test-key",
+      conversation_messages=conversation_history,
+    )
+
+    # Verify response is returned correctly
+    assert result == "Gemini response with context"
+    mock_pool.apply.assert_called_once()
+
+  def test_query_gemini_missing_api_key(self):
+    """Test Gemini query with missing API key raises ValueError."""
+    with pytest.raises(ValueError, match="Missing Google API key"):
+      query_gemini(
+        query="Test",
+        system="Test",
+        model="gemini-2.0-flash",
+        temperature=0.7,
+        max_tokens=1000,
+        api_key="",  # Empty API key
+      )
+
+  @patch("multiprocessing.get_context")
+  def test_query_gemini_error_response(self, mock_get_context):
+    """Test Gemini query handles error responses from subprocess."""
+    mock_ctx = MagicMock()
+    mock_pool = MagicMock()
+    # Simulate subprocess returning ERROR: prefix
+    mock_pool.apply.return_value = "ERROR: Invalid API key"
+    mock_ctx.Pool.return_value.__enter__ = MagicMock(return_value=mock_pool)
+    mock_ctx.Pool.return_value.__exit__ = MagicMock(return_value=None)
+    mock_get_context.return_value = mock_ctx
+
+    with pytest.raises(Exception, match="Invalid API key"):
+      query_gemini(
+        query="Test",
+        system="Test",
+        model="gemini-2.0-flash",
+        temperature=0.7,
+        max_tokens=1000,
+        api_key="invalid-key",
+      )
+
+  def test_initialize_clients_google_uses_client_object(self):
+    """Test that initialize_clients creates Google client using new SDK."""
+    api_keys = {
+      "OPENAI_API_KEY": "",
+      "ANTHROPIC_API_KEY": "",
+      "GOOGLE_API_KEY": "test-google-key",
+      "OLLAMA_API_KEY": "llama",
+    }
+
+    with patch("llm_clients.OpenAI"), patch("llm_clients.Anthropic"), patch("llm_clients.genai") as mock_genai:
+      # Mock the new Client creation
+      mock_client = MagicMock()
+      mock_genai.Client.return_value = mock_client
+
+      clients = initialize_clients(api_keys)
+
+      # Verify genai.Client was called with the API key
+      mock_genai.Client.assert_called_once_with(api_key="test-google-key")
+
+      # Verify the client is stored
+      assert clients["google"] == mock_client
+
+  @patch("llm_clients.genai")
+  def test_get_available_gemini_models_uses_new_sdk(self, mock_genai):
+    """Test get_available_gemini_models uses new google-genai SDK patterns."""
+    from llm_clients import get_available_gemini_models
+
+    # Setup mock for new SDK
+    mock_model = MagicMock()
+    mock_model.name = "models/gemini-2.0-flash"
+
+    mock_client = MagicMock()
+    mock_client.models.list.return_value = [mock_model]
+    mock_genai.Client.return_value = mock_client
+
+    result = get_available_gemini_models("test-api-key")
+
+    # Verify Client was created
+    mock_genai.Client.assert_called_once_with(api_key="test-api-key")
+
+    # Verify models.list() was called (new SDK pattern)
+    mock_client.models.list.assert_called_once()
+
+    # Verify result contains the model
+    assert "models/gemini-2.0-flash" in result
 
 
 class TestOllamaProvider:
@@ -625,6 +753,8 @@ class TestOllamaProvider:
     """Test Llama request connection error handling."""
     import requests as real_requests
 
+    from errors import APIError
+
     mock_client = MagicMock()
     mock_client.base_url = "http://localhost:11434/v1"
 
@@ -632,7 +762,7 @@ class TestOllamaProvider:
     mock_requests.post.side_effect = real_requests.RequestException("Connection refused")
     mock_requests.RequestException = real_requests.RequestException
 
-    with pytest.raises(ValueError, match="Connection error"):
+    with pytest.raises(APIError, match="[Cc]onnection error"):
       query_llama(
         client=mock_client,
         query_text="Test query",
@@ -648,6 +778,8 @@ class TestOllamaProvider:
     """Test Llama API error response handling."""
     import requests as real_requests
 
+    from errors import APIError
+
     mock_client = MagicMock()
     mock_client.base_url = "http://localhost:11434/v1"
 
@@ -660,7 +792,7 @@ class TestOllamaProvider:
     # Need to provide the real RequestException class for the except clause
     mock_requests.RequestException = real_requests.RequestException
 
-    with pytest.raises(ValueError, match="Ollama API error"):
+    with pytest.raises(APIError, match="Ollama query error"):
       query_llama(
         client=mock_client,
         query_text="Test query",
@@ -796,27 +928,37 @@ class TestErrorHandling:
 
   def test_openai_authentication_error(self):
     """Test OpenAI authentication error handling."""
+    import openai
+
     with patch("llm_clients.OpenAI") as mock_openai_class:
       mock_client = MagicMock()
       mock_openai_class.return_value = mock_client
 
-      # Simulate authentication error on Responses API
+      # Simulate authentication error using proper OpenAI exception
       from errors import AuthenticationError
 
-      mock_client.responses.create.side_effect = Exception("invalid_api_key")
+      mock_response = MagicMock()
+      mock_response.status_code = 401
+      mock_response.headers = {}
+      error = openai.AuthenticationError("invalid_api_key", response=mock_response, body=None)
+      mock_client.responses.create.side_effect = error
 
       with pytest.raises(AuthenticationError):
         query_openai(client=mock_client, query="Test", system="Test", model="gpt-4o", temperature=0.7, max_tokens=100)
 
   def test_anthropic_rate_limit_error(self):
     """Test Anthropic rate limit error handling."""
+    import anthropic
+
     with patch("llm_clients.Anthropic") as mock_anthropic_class:
       mock_client = MagicMock()
       mock_anthropic_class.return_value = mock_client
 
-      # Simulate rate limit error
-      error = Exception("rate limit")
-      error.status_code = 429
+      # Simulate rate limit error using proper Anthropic exception
+      mock_response = MagicMock()
+      mock_response.status_code = 429
+      mock_response.headers = {}
+      error = anthropic.RateLimitError("rate limit", response=mock_response, body=None)
       mock_client.messages.create.side_effect = error
 
       from errors import APIError
@@ -846,5 +988,234 @@ class TestErrorHandling:
       )
 
 
+class TestSpecificExceptionHandlers:
+  """Test specific exception handlers that replaced broad Exception catches."""
+
+  def test_anthropic_authentication_error(self):
+    """Test Anthropic authentication error is properly handled."""
+    import anthropic
+
+    from errors import AuthenticationError
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 401
+    mock_response.headers = {}
+    error = anthropic.AuthenticationError("Invalid API key", response=mock_response, body=None)
+    mock_client.messages.create.side_effect = error
+
+    with pytest.raises(AuthenticationError, match="Invalid Anthropic API key"):
+      query_anthropic(client=mock_client, query_text="Test", systemprompt="Test", model="claude-3-5-sonnet", temperature=0.7, max_tokens=100)
+
+  def test_anthropic_bad_request_error(self):
+    """Test Anthropic bad request error is properly handled."""
+    import anthropic
+
+    from errors import APIError
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+    mock_response.headers = {}
+    error = anthropic.BadRequestError("Invalid request parameters", response=mock_response, body=None)
+    mock_client.messages.create.side_effect = error
+
+    with pytest.raises(APIError, match="[Bb]ad request"):
+      query_anthropic(client=mock_client, query_text="Test", systemprompt="Test", model="claude-3-5-sonnet", temperature=0.7, max_tokens=100)
+
+  def test_anthropic_api_connection_error(self):
+    """Test Anthropic API connection error is properly handled."""
+    import anthropic
+
+    from errors import APIError
+
+    mock_client = MagicMock()
+    error = anthropic.APIConnectionError(request=MagicMock())
+    mock_client.messages.create.side_effect = error
+
+    with pytest.raises(APIError, match="[Cc]onnection"):
+      query_anthropic(client=mock_client, query_text="Test", systemprompt="Test", model="claude-3-5-sonnet", temperature=0.7, max_tokens=100)
+
+  def test_anthropic_api_status_error(self):
+    """Test Anthropic API status error is properly handled."""
+    import anthropic
+
+    from errors import APIError
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 500
+    mock_response.headers = {}
+    error = anthropic.APIStatusError("Internal server error", response=mock_response, body=None)
+    mock_client.messages.create.side_effect = error
+
+    with pytest.raises(APIError, match="Anthropic API error"):
+      query_anthropic(client=mock_client, query_text="Test", systemprompt="Test", model="claude-3-5-sonnet", temperature=0.7, max_tokens=100)
+
+  def test_openai_bad_request_error(self):
+    """Test OpenAI bad request error is properly handled."""
+    import openai
+
+    from errors import APIError
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 400
+    mock_response.headers = {}
+    error = openai.BadRequestError("Invalid request", response=mock_response, body=None)
+    mock_client.responses.create.side_effect = error
+
+    with pytest.raises(APIError, match="[Bb]ad request"):
+      query_openai(client=mock_client, query="Test", system="Test", model="gpt-4o", temperature=0.7, max_tokens=100)
+
+  def test_openai_api_connection_error(self):
+    """Test OpenAI API connection error is properly handled."""
+    import openai
+
+    from errors import APIError
+
+    mock_client = MagicMock()
+    error = openai.APIConnectionError(request=MagicMock())
+    mock_client.responses.create.side_effect = error
+
+    with pytest.raises(APIError, match="[Cc]onnection"):
+      query_openai(client=mock_client, query="Test", system="Test", model="gpt-4o", temperature=0.7, max_tokens=100)
+
+  def test_openai_api_status_error(self):
+    """Test OpenAI API status error is properly handled."""
+    import openai
+
+    from errors import APIError
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.status_code = 502
+    mock_response.headers = {}
+    error = openai.APIStatusError("Gateway error", response=mock_response, body=None)
+    mock_client.responses.create.side_effect = error
+
+    # Server errors (5xx) produce "OpenAI server error" message
+    with pytest.raises(APIError, match="OpenAI server error"):
+      query_openai(client=mock_client, query="Test", system="Test", model="gpt-4o", temperature=0.7, max_tokens=100)
+
+  def test_anthropic_response_parsing_attribute_error(self):
+    """Test Anthropic response with malformed content is handled."""
+    from errors import APIError
+
+    mock_client = MagicMock()
+    # Response without expected .text attribute
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock(spec=[])]  # No text attribute
+    del mock_response.content[0].text  # Remove text attribute
+    mock_client.messages.create.return_value = mock_response
+
+    with pytest.raises((APIError, AttributeError)):
+      query_anthropic(client=mock_client, query_text="Test", systemprompt="Test", model="claude-3-5-sonnet", temperature=0.7, max_tokens=100)
+
+  def test_anthropic_response_parsing_index_error(self):
+    """Test Anthropic response with empty content list is handled."""
+    from errors import APIError
+
+    mock_client = MagicMock()
+    mock_response = MagicMock()
+    mock_response.content = []  # Empty content list
+    mock_client.messages.create.return_value = mock_response
+
+    with pytest.raises((APIError, IndexError)):
+      query_anthropic(client=mock_client, query_text="Test", systemprompt="Test", model="claude-3-5-sonnet", temperature=0.7, max_tokens=100)
+
+  @patch("llm_clients.requests")
+  def test_ollama_json_decode_graceful_fallback(self, mock_requests):
+    """Test Ollama gracefully handles invalid JSON by returning raw text."""
+    import requests as real_requests
+
+    mock_client = MagicMock()
+    mock_client.base_url = "http://localhost:11434/v1"
+
+    # Return invalid JSON that doesn't look like JSON (graceful fallback)
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.text = "This is plain text response"
+    mock_requests.post.return_value = mock_response
+    mock_requests.RequestException = real_requests.RequestException
+
+    # The code should gracefully return the raw text instead of raising an error
+    result = query_llama(
+      client=mock_client,
+      query_text="Test query",
+      systemprompt="Test",
+      model="gemma3:4b",
+      temperature=0.7,
+      max_tokens=1000,
+      api_keys={"OLLAMA_API_KEY": "ollama"},
+    )
+
+    # Should return the raw text as fallback
+    assert result == "This is plain text response"
+
+  def test_initialize_clients_type_error_anthropic(self):
+    """Test Anthropic client initialization with TypeError."""
+    api_keys = {
+      "OPENAI_API_KEY": "",
+      "ANTHROPIC_API_KEY": "key",
+      "GOOGLE_API_KEY": "",
+      "OLLAMA_API_KEY": "llama",
+    }
+
+    with patch("llm_clients.OpenAI"), patch("llm_clients.Anthropic") as mock_anthropic, patch("llm_clients.genai"):
+      mock_anthropic.side_effect = TypeError("missing required argument")
+
+      clients = initialize_clients(api_keys)
+      assert clients["anthropic"] is None
+
+  def test_initialize_clients_value_error_anthropic(self):
+    """Test Anthropic client initialization with ValueError."""
+    api_keys = {
+      "OPENAI_API_KEY": "",
+      "ANTHROPIC_API_KEY": "key",
+      "GOOGLE_API_KEY": "",
+      "OLLAMA_API_KEY": "llama",
+    }
+
+    with patch("llm_clients.OpenAI"), patch("llm_clients.Anthropic") as mock_anthropic, patch("llm_clients.genai"):
+      mock_anthropic.side_effect = ValueError("invalid api_key format")
+
+      clients = initialize_clients(api_keys)
+      assert clients["anthropic"] is None
+
+  def test_initialize_clients_type_error_google(self):
+    """Test Google client initialization with TypeError."""
+    api_keys = {
+      "OPENAI_API_KEY": "",
+      "ANTHROPIC_API_KEY": "",
+      "GOOGLE_API_KEY": "key",
+      "OLLAMA_API_KEY": "llama",
+    }
+
+    with patch("llm_clients.OpenAI"), patch("llm_clients.Anthropic"), patch("llm_clients.genai") as mock_genai:
+      mock_genai.Client.side_effect = TypeError("unexpected argument")
+
+      clients = initialize_clients(api_keys)
+      assert clients["google"] is None
+
+  def test_initialize_clients_attribute_error_google(self):
+    """Test Google client initialization with AttributeError."""
+    api_keys = {
+      "OPENAI_API_KEY": "",
+      "ANTHROPIC_API_KEY": "",
+      "GOOGLE_API_KEY": "key",
+      "OLLAMA_API_KEY": "llama",
+    }
+
+    with patch("llm_clients.OpenAI"), patch("llm_clients.Anthropic"), patch("llm_clients.genai") as mock_genai:
+      mock_genai.Client.side_effect = AttributeError("Client has no attribute")
+
+      clients = initialize_clients(api_keys)
+      assert clients["google"] is None
+
+
 if __name__ == "__main__":
   pytest.main([__file__])
+
+
+# fin

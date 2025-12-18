@@ -59,8 +59,18 @@ def load_config(default_config_path, user_config_path=None):
     logger.error(error_msg)
     click.echo(f"Error: {error_msg}", err=True)
     raise
-  except Exception as e:
-    error_msg = f"Error loading default config: {str(e)}"
+  except PermissionError as e:
+    error_msg = f"Permission denied reading default config: {e}"
+    logger.error(error_msg)
+    click.echo(f"Error: {error_msg}", err=True)
+    raise
+  except (IOError, OSError) as e:
+    error_msg = f"I/O error loading default config: {e}"
+    logger.error(error_msg)
+    click.echo(f"Error: {error_msg}", err=True)
+    raise
+  except UnicodeDecodeError as e:
+    error_msg = f"Encoding error in default config: {e}"
     logger.error(error_msg)
     click.echo(f"Error: {error_msg}", err=True)
     raise
@@ -88,8 +98,18 @@ def load_config(default_config_path, user_config_path=None):
       logger.error(error_msg)
       click.echo(f"Error: {error_msg}", err=True)
       raise
-    except Exception as e:
-      error_msg = f"Error loading user config: {str(e)}"
+    except PermissionError as e:
+      error_msg = f"Permission denied reading user config: {e}"
+      logger.error(error_msg)
+      click.echo(f"Error: {error_msg}", err=True)
+      raise
+    except (IOError, OSError) as e:
+      error_msg = f"I/O error loading user config: {e}"
+      logger.error(error_msg)
+      click.echo(f"Error: {error_msg}", err=True)
+      raise
+    except UnicodeDecodeError as e:
+      error_msg = f"Encoding error in user config: {e}"
       logger.error(error_msg)
       click.echo(f"Error: {error_msg}", err=True)
       raise
@@ -169,8 +189,14 @@ def edit_yaml_file(filename: str):
   except ValidationError as e:
     click.echo(f"Error: Invalid editor configuration: {e}", err=True)
     raise
-  except Exception as e:
-    click.echo(f"Error: Unexpected error during file editing: {e}", err=True)
+  except PermissionError as e:
+    click.echo(f"Error: Permission denied during file editing: {e}", err=True)
+    raise
+  except OSError as e:
+    click.echo(f"Error: I/O error during file editing: {e}", err=True)
+    raise
+  except shutil.Error as e:
+    click.echo(f"Error: File operation error during editing: {e}", err=True)
     raise
 
 
@@ -233,6 +259,12 @@ def edit_json_file(filename: str):
   except ValidationError as e:
     click.echo(f"Error: Invalid editor configuration: {e}", err=True)
     raise
-  except Exception as e:
-    click.echo(f"Error: Unexpected error during file editing: {e}", err=True)
+  except PermissionError as e:
+    click.echo(f"Error: Permission denied during file editing: {e}", err=True)
+    raise
+  except OSError as e:
+    click.echo(f"Error: I/O error during file editing: {e}", err=True)
+    raise
+  except shutil.Error as e:
+    click.echo(f"Error: File operation error during editing: {e}", err=True)
     raise

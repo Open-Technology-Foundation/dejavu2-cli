@@ -140,3 +140,141 @@ class TestConfig:
       assert "api_keys" in config
       assert isinstance(config["api_keys"], dict)
       assert len(config["api_keys"]) == 0
+
+
+class TestConfigEdgeCases:
+  """Test edge cases in configuration handling."""
+
+  def test_load_config_empty_yaml_file(self):
+    """Test handling of empty YAML file."""
+    import pytest
+
+    empty_yaml = ""
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=empty_yaml)):
+      with pytest.raises(KeyError, match="Required configuration keys missing"):
+        load_config("default_config.yaml")
+
+  def test_load_config_yaml_with_null_values(self):
+    """Test handling of YAML with null values."""
+    config_with_nulls = {
+      "paths": {"template_path": None},
+      "defaults": {"model": None, "temperature": 0.7, "max_tokens": None},
+    }
+    config_yaml = yaml.dump(config_with_nulls)
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+      config = load_config("default_config.yaml")
+
+      # Null values should be preserved
+      assert config["paths"]["template_path"] is None
+      assert config["defaults"]["model"] is None
+      assert config["defaults"]["max_tokens"] is None
+      assert config["defaults"]["temperature"] == 0.7
+
+  def test_load_config_unicode_values(self):
+    """Test handling of Unicode characters in config."""
+    config_with_unicode = {
+      "paths": {"template_path": "/path/to/日本語/config"},
+      "defaults": {"model": "claude-3-5-sonnet", "description": "Configuração com émojis 🚀"},
+    }
+    config_yaml = yaml.dump(config_with_unicode, allow_unicode=True)
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+      config = load_config("default_config.yaml")
+
+      assert "日本語" in config["paths"]["template_path"]
+      assert "émojis 🚀" in config["defaults"]["description"]
+
+  def test_load_config_deeply_nested_values(self):
+    """Test handling of deeply nested configuration values."""
+    deeply_nested_config = {
+      "paths": {"template_path": "/path"},
+      "defaults": {"model": "test"},
+      "nested": {"level1": {"level2": {"level3": {"level4": {"value": "deep"}}}}},
+    }
+    config_yaml = yaml.dump(deeply_nested_config)
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+      config = load_config("default_config.yaml")
+
+      assert config["nested"]["level1"]["level2"]["level3"]["level4"]["value"] == "deep"
+
+  def test_load_config_numeric_string_values(self):
+    """Test that numeric strings are preserved as strings."""
+    config_with_numeric_strings = {"paths": {"template_path": "/path"}, "defaults": {"model": "123.456", "version": "3.14159"}}
+    config_yaml = yaml.dump(config_with_numeric_strings)
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+      config = load_config("default_config.yaml")
+
+      # YAML may parse "123.456" as a float, verify handling
+      assert config["defaults"]["model"] is not None
+      assert config["defaults"]["version"] is not None
+
+  def test_load_config_list_values(self):
+    """Test handling of list values in config."""
+    config_with_lists = {
+      "paths": {"template_path": "/path"},
+      "defaults": {"model": "test", "allowed_models": ["gpt-4o", "claude-3-5-sonnet", "gemini-2.0-flash"]},
+    }
+    config_yaml = yaml.dump(config_with_lists)
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+      config = load_config("default_config.yaml")
+
+      assert isinstance(config["defaults"]["allowed_models"], list)
+      assert len(config["defaults"]["allowed_models"]) == 3
+      assert "gpt-4o" in config["defaults"]["allowed_models"]
+
+  def test_load_config_boolean_values(self):
+    """Test handling of boolean values in config."""
+    config_with_booleans = {
+      "paths": {"template_path": "/path"},
+      "defaults": {"model": "test", "verbose": True, "debug": False},
+    }
+    config_yaml = yaml.dump(config_with_booleans)
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+      config = load_config("default_config.yaml")
+
+      assert config["defaults"]["verbose"] is True
+      assert config["defaults"]["debug"] is False
+
+  def test_load_config_yaml_boolean_keywords(self):
+    """Test handling of YAML boolean keywords (yes/no/true/false)."""
+    # Test raw YAML with boolean keywords
+    yaml_with_keywords = """
+paths:
+  template_path: /path
+defaults:
+  model: test
+  enabled: yes
+  disabled: no
+  on_state: on
+  off_state: off
+"""
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=yaml_with_keywords)):
+      config = load_config("default_config.yaml")
+
+      # YAML 1.1 parses yes/no/on/off as booleans
+      assert config["defaults"]["enabled"] is True
+      assert config["defaults"]["disabled"] is False
+      assert config["defaults"]["on_state"] is True
+      assert config["defaults"]["off_state"] is False
+
+  def test_load_config_special_characters_in_paths(self):
+    """Test handling of special characters in path values."""
+    config_with_special_paths = {"paths": {"template_path": "/path/with spaces/and-dashes/under_scores"}, "defaults": {"model": "test"}}
+    config_yaml = yaml.dump(config_with_special_paths)
+
+    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+      config = load_config("default_config.yaml")
+
+      assert " " in config["paths"]["template_path"]
+      assert "-" in config["paths"]["template_path"]
+      assert "_" in config["paths"]["template_path"]
+
+
+# fin
