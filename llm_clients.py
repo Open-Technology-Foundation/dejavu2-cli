@@ -1275,28 +1275,30 @@ def route_query_by_family(
   if not model:
     raise ValueError("Model name cannot be None or empty")
 
-  if model_family == "anthropic":
-    client = get_anthropic_client(clients)
-    return query_anthropic(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
+  match model_family:
+    case "anthropic":
+      client = get_anthropic_client(clients)
+      return query_anthropic(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
 
-  elif model_family == "google":
-    google_api_key = validate_google_api_key(api_keys)
-    return query_gemini(query_text, systemprompt, model, temperature, max_tokens, google_api_key, conversation_messages)
+    case "google":
+      google_api_key = validate_google_api_key(api_keys)
+      return query_gemini(query_text, systemprompt, model, temperature, max_tokens, google_api_key, conversation_messages)
 
-  elif model_family == "ollama":
-    client = get_ollama_client(clients, model_parameters)
-    return query_llama(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages, api_keys=api_keys)
+    case "ollama":
+      client = get_ollama_client(clients, model_parameters)
+      return query_llama(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages, api_keys=api_keys)
 
-  elif model_family == "openai" or (model and model.startswith(("gpt", "chatgpt", "o1", "o3", "o4"))):
-    client = get_openai_client(clients)
+    case "openai" | _ if model and model.startswith(("gpt", "chatgpt", "o1", "o3", "o4")):
+      client = get_openai_client(clients)
 
-    # Special handling for O-series models
-    if model and model.startswith(("o1", "o3", "o4")):
-      temperature = 1
+      # Special handling for O-series models
+      if model and model.startswith(("o1", "o3", "o4")):
+        temperature = 1
 
-    return query_openai(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
+      return query_openai(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
 
-  return None
+    case _:
+      return None
 
 
 def route_query_by_name(
