@@ -6,12 +6,19 @@ import os
 
 # Import functions from the application
 import sys
-from unittest.mock import mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import yaml
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from config import load_config
+
+
+def mock_path_exists(exists=True):
+  """Create a mock Path object with exists() returning given value."""
+  mock_path = MagicMock()
+  mock_path.exists.return_value = exists
+  return mock_path
 
 
 class TestConfig:
@@ -41,7 +48,7 @@ class TestConfig:
       return mock_open()()
 
     # Mock both files existing
-    with patch("builtins.open", side_effect=mock_file_open), patch("os.path.exists", return_value=True):
+    with patch("builtins.open", side_effect=mock_file_open), patch("config.Path", return_value=mock_path_exists(True)):
       config = load_config("default_config_path", "user_config_path")
 
       # Check merged values
@@ -55,7 +62,7 @@ class TestConfig:
     """Test that FileNotFoundError is raised when default config doesn't exist."""
     import pytest
 
-    with patch("os.path.exists", return_value=False):
+    with patch("config.Path", return_value=mock_path_exists(False)):
       with pytest.raises(FileNotFoundError, match="Default config file not found"):
         load_config("nonexistent_default.yaml")
 
@@ -66,7 +73,7 @@ class TestConfig:
     # Invalid YAML content
     invalid_yaml = "invalid: yaml: content: with: too: many: colons:"
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=invalid_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=invalid_yaml)):
       with pytest.raises(yaml.YAMLError):
         load_config("default_config.yaml")
 
@@ -74,7 +81,7 @@ class TestConfig:
     """Test generic exception handling for unexpected errors in default config."""
     import pytest
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", side_effect=IOError("Disk error")):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", side_effect=IOError("Disk error")):
       with pytest.raises(IOError, match="Disk error"):
         load_config("default_config.yaml")
 
@@ -93,7 +100,7 @@ class TestConfig:
         return mock_open(read_data=invalid_user_yaml)()
       return mock_open()()
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", side_effect=mock_file_open):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", side_effect=mock_file_open):
       with pytest.raises(yaml.YAMLError):
         load_config("default_config.yaml", "user_config.yaml")
 
@@ -111,7 +118,7 @@ class TestConfig:
         raise PermissionError("Permission denied")
       return mock_open()()
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", side_effect=mock_file_open):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", side_effect=mock_file_open):
       with pytest.raises(PermissionError, match="Permission denied"):
         load_config("default_config.yaml", "user_config.yaml")
 
@@ -123,7 +130,7 @@ class TestConfig:
     incomplete_config = {"other_key": "value"}
     incomplete_yaml = yaml.dump(incomplete_config)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=incomplete_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=incomplete_yaml)):
       with pytest.raises(KeyError, match="Required configuration keys missing"):
         load_config("default_config.yaml")
 
@@ -133,7 +140,7 @@ class TestConfig:
     config_without_api_keys = {"paths": {"template_path": "/path"}, "defaults": {"model": "test"}}
     config_yaml = yaml.dump(config_without_api_keys)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       # Verify api_keys key exists as empty dict
@@ -151,7 +158,7 @@ class TestConfigEdgeCases:
 
     empty_yaml = ""
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=empty_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=empty_yaml)):
       with pytest.raises(KeyError, match="Required configuration keys missing"):
         load_config("default_config.yaml")
 
@@ -163,7 +170,7 @@ class TestConfigEdgeCases:
     }
     config_yaml = yaml.dump(config_with_nulls)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       # Null values should be preserved
@@ -180,7 +187,7 @@ class TestConfigEdgeCases:
     }
     config_yaml = yaml.dump(config_with_unicode, allow_unicode=True)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       assert "日本語" in config["paths"]["template_path"]
@@ -195,7 +202,7 @@ class TestConfigEdgeCases:
     }
     config_yaml = yaml.dump(deeply_nested_config)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       assert config["nested"]["level1"]["level2"]["level3"]["level4"]["value"] == "deep"
@@ -205,7 +212,7 @@ class TestConfigEdgeCases:
     config_with_numeric_strings = {"paths": {"template_path": "/path"}, "defaults": {"model": "123.456", "version": "3.14159"}}
     config_yaml = yaml.dump(config_with_numeric_strings)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       # YAML may parse "123.456" as a float, verify handling
@@ -220,7 +227,7 @@ class TestConfigEdgeCases:
     }
     config_yaml = yaml.dump(config_with_lists)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       assert isinstance(config["defaults"]["allowed_models"], list)
@@ -235,7 +242,7 @@ class TestConfigEdgeCases:
     }
     config_yaml = yaml.dump(config_with_booleans)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       assert config["defaults"]["verbose"] is True
@@ -255,7 +262,7 @@ defaults:
   off_state: off
 """
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=yaml_with_keywords)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=yaml_with_keywords)):
       config = load_config("default_config.yaml")
 
       # YAML 1.1 parses yes/no/on/off as booleans
@@ -269,7 +276,7 @@ defaults:
     config_with_special_paths = {"paths": {"template_path": "/path/with spaces/and-dashes/under_scores"}, "defaults": {"model": "test"}}
     config_yaml = yaml.dump(config_with_special_paths)
 
-    with patch("os.path.exists", return_value=True), patch("builtins.open", mock_open(read_data=config_yaml)):
+    with patch("config.Path", return_value=mock_path_exists(True)), patch("builtins.open", mock_open(read_data=config_yaml)):
       config = load_config("default_config.yaml")
 
       assert " " in config["paths"]["template_path"]

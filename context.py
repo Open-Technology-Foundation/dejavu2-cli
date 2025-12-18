@@ -11,6 +11,7 @@ import os
 import subprocess
 import xml.sax.saxutils
 from glob import glob
+from pathlib import Path
 
 import click
 
@@ -49,7 +50,7 @@ def get_reference_string(reference: str) -> str:
       # Validate file path for security
       safe_file_path = validate_file_path(file_name, must_exist=True)
 
-      base_name = os.path.splitext(os.path.basename(safe_file_path))[0]
+      base_name = Path(safe_file_path).stem
       # Escape the base name for XML safety
       safe_base_name = xml.sax.saxutils.escape(base_name)
 
@@ -124,16 +125,16 @@ def get_knowledgebase_string(knowledgebase: str, knowledgebase_query: str, custo
     safe_knowledgebase = validate_file_path(knowledgebase)
 
     # Search for the knowledgebase file if it doesn't exist directly
-    if not os.path.exists(safe_knowledgebase):
+    if not Path(safe_knowledgebase).exists():
       # Try with VECTORDBS_PATH environment variable if set
       vectordbs_env = os.environ.get("VECTORDBS", vectordbs_path)
-      search_pattern = os.path.join(vectordbs_env, "**", os.path.basename(safe_knowledgebase))
+      search_pattern = str(Path(vectordbs_env) / "**" / Path(safe_knowledgebase).name)
       matches = glob(search_pattern, recursive=True)
       if matches:
         safe_knowledgebase = validate_file_path(matches[0], must_exist=True)
       else:
         # Fallback to default path
-        search_pattern = os.path.join(vectordbs_path, "**", os.path.basename(safe_knowledgebase))
+        search_pattern = str(Path(vectordbs_path) / "**" / Path(safe_knowledgebase).name)
         matches = glob(search_pattern, recursive=True)
         if matches:
           safe_knowledgebase = validate_file_path(matches[0], must_exist=True)
@@ -153,7 +154,7 @@ def get_knowledgebase_string(knowledgebase: str, knowledgebase_query: str, custo
           env_vars.append(key)
       secure_subprocess.config.environment_whitelist = env_vars
 
-    logger.info(f"Running secure customkb query: {os.path.basename(safe_executable)} query [knowledgebase] [query] --context")
+    logger.info(f"Running secure customkb query: {Path(safe_executable).name} query [knowledgebase] [query] --context")
 
     # Execute with security validation
     result = secure_subprocess.run([safe_executable, "query", safe_knowledgebase, safe_query, "--context", "--quiet"])
@@ -200,24 +201,24 @@ def list_knowledge_bases(vectordbs_path: str) -> list:
   Raises:
       KnowledgeBaseError: If the vectordbs_path is not a valid directory
   """
-  if not os.path.isdir(vectordbs_path):
+  if not Path(vectordbs_path).is_dir():
     error_msg = f"Knowledgebase directory '{vectordbs_path}' is not a valid directory"
     logger.error(error_msg)
     raise KnowledgeBaseError(error_msg)
 
   knowledge_bases = set()  # Using set to automatically handle duplicates
-  search_path = os.path.join(vectordbs_path, "**", "*.cfg")
+  search_path = str(Path(vectordbs_path) / "**" / "*.cfg")
 
   # Get all .cfg files and resolve to canonical paths
   for cfg_file in glob(search_path, recursive=True):
-    canonical_path = os.path.realpath(cfg_file)  # Resolves symlinks to real path
+    canonical_path = str(Path(cfg_file).resolve())  # Resolves symlinks to real path
     knowledge_bases.add(canonical_path)
 
   # Convert set back to sorted list
   knowledge_bases = sorted(knowledge_bases)
 
   if knowledge_bases:
-    sorted_kb_names = sorted([os.path.splitext(os.path.basename(kb))[0] for kb in knowledge_bases])
+    sorted_kb_names = sorted([Path(kb).stem for kb in knowledge_bases])
     click.echo("Available Knowledgebases:")
     for kb in sorted_kb_names:
       click.echo(f"  {kb}")

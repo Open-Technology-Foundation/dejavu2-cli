@@ -5,13 +5,22 @@ Unit tests for model handling in dejavu2-cli.
 import json
 import os
 import sys
-from unittest.mock import mock_open, patch
+from unittest.mock import MagicMock, mock_open, patch
 
 import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
 from errors import ConfigurationError, ModelError
 from models import get_canonical_model, list_available_canonical_models, load_models_json
+
+
+def mock_path_stat(st_mtime):
+  """Create a mock for Path.stat() returning given st_mtime."""
+  mock_stat = MagicMock()
+  mock_stat.st_mtime = st_mtime
+  mock_path = MagicMock()
+  mock_path.stat.return_value = mock_stat
+  return mock_path
 
 
 class TestModels:
@@ -34,7 +43,7 @@ class TestModels:
 
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       models = list_available_canonical_models("dummy_path.json")
 
       # Check models list - only available models should be included
@@ -45,12 +54,14 @@ class TestModels:
 
   def test_list_available_canonical_models_file_not_found(self):
     """Test listing models when the JSON file doesn't exist."""
-    with patch("os.path.getmtime", side_effect=FileNotFoundError), pytest.raises(ConfigurationError, match="Models file not found"):
+    mock_path = MagicMock()
+    mock_path.stat.side_effect = FileNotFoundError
+    with patch("models.Path", return_value=mock_path), pytest.raises(ConfigurationError, match="Models file not found"):
       list_available_canonical_models("nonexistent.json")
 
   def test_list_available_canonical_models_invalid_json(self):
     """Test listing models with invalid JSON content."""
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data='{"invalid": json')):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data='{"invalid": json')):
       with pytest.raises(ConfigurationError, match="Invalid JSON in models file"):
         list_available_canonical_models("invalid.json")
 
@@ -72,7 +83,7 @@ class TestModels:
 
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       canonical_name, model_info = get_canonical_model("gpt-4o", "dummy_path.json")
 
       assert canonical_name == "gpt-4o"
@@ -99,7 +110,7 @@ class TestModels:
 
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       canonical_name, model_info = get_canonical_model("gpt4", "dummy_path.json")
 
       assert canonical_name == "gpt-4o"
@@ -125,19 +136,21 @@ class TestModels:
 
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)), pytest.raises(
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)), pytest.raises(
       ModelError, match="Model 'nonexistent-model' not found"
     ):
       get_canonical_model("nonexistent-model", "dummy_path.json")
 
   def test_get_canonical_model_file_not_found(self):
     """Test getting canonical model when models file doesn't exist."""
-    with patch("os.path.getmtime", side_effect=FileNotFoundError), pytest.raises(ConfigurationError, match="Models file not found"):
+    mock_path = MagicMock()
+    mock_path.stat.side_effect = FileNotFoundError
+    with patch("models.Path", return_value=mock_path), pytest.raises(ConfigurationError, match="Models file not found"):
       get_canonical_model("gpt-4o", "nonexistent.json")
 
   def test_get_canonical_model_invalid_json(self):
     """Test getting canonical model with invalid JSON."""
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data='{"invalid": json')):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data='{"invalid": json')):
       with pytest.raises(ConfigurationError, match="Invalid JSON in models file"):
         get_canonical_model("gpt-4o", "invalid.json")
 
@@ -147,13 +160,13 @@ class TestModels:
     mock_json = json.dumps(mock_models)
 
     # First load - should read from file
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)) as mock_file:
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)) as mock_file:
       result1 = load_models_json("test.json")
       assert mock_file.called
       assert "gpt-4o" in result1
 
     # Second load with same mtime - should use cache
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)) as mock_file:
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)) as mock_file:
       result2 = load_models_json("test.json")
       # File should not be opened again due to cache
       assert not mock_file.called
@@ -163,7 +176,7 @@ class TestModels:
     updated_models = {"gpt-4o": {"model": "gpt-4o", "parent": "openai", "available": 1}, "new-model": {"model": "new-model", "parent": "test", "available": 1}}
     updated_json = json.dumps(updated_models)
 
-    with patch("os.path.getmtime", return_value=9999999999.0), patch("builtins.open", mock_open(read_data=updated_json)) as mock_file:
+    with patch("models.Path", return_value=mock_path_stat(9999999999.0)), patch("builtins.open", mock_open(read_data=updated_json)) as mock_file:
       result3 = load_models_json("test.json")
       assert mock_file.called
       assert "new-model" in result3
@@ -174,11 +187,11 @@ class TestModels:
     mock_json = json.dumps(mock_models)
 
     # First load
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       load_models_json("test.json")
 
     # Force reload should read from file again
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)) as mock_file:
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)) as mock_file:
       load_models_json("test.json", force_reload=True)
       assert mock_file.called
 
@@ -195,7 +208,7 @@ class TestModels:
     }
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       # Test lowercase
       canonical_name, _ = get_canonical_model("sonnet", "dummy.json")
       assert canonical_name == "claude-3-5-sonnet-latest"
@@ -210,7 +223,7 @@ class TestModels:
     }
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       models = list_available_canonical_models("dummy.json")
 
       assert "model-available-1" in models
@@ -239,7 +252,7 @@ class TestModels:
     }
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       # Test OpenAI alias
       canonical_name, model_info = get_canonical_model("gpt4o", "dummy.json")
       assert canonical_name == "gpt-4o-2024-11-20"
@@ -251,7 +264,7 @@ class TestModels:
       models._models_cache.clear()
       models._cache_mtime.clear()
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       # Test Anthropic alias
       canonical_name, model_info = get_canonical_model("sonnet", "dummy.json")
       assert canonical_name == "claude-3-5-sonnet-latest"
@@ -270,7 +283,7 @@ class TestModels:
     }
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       canonical_name, model_info = get_canonical_model("old", "dummy.json")
       assert canonical_name is None
       assert model_info == {}
@@ -288,7 +301,7 @@ class TestModels:
     }
     mock_json = json.dumps(mock_models)
 
-    with patch("os.path.getmtime", return_value=1234567890.0), patch("builtins.open", mock_open(read_data=mock_json)):
+    with patch("models.Path", return_value=mock_path_stat(1234567890.0)), patch("builtins.open", mock_open(read_data=mock_json)):
       canonical_name, model_info = get_canonical_model("disabled", "dummy.json")
       assert canonical_name is None
       assert model_info == {}

@@ -261,8 +261,7 @@ class ConversationManager:
   def __init__(self, storage_dir: str | None = None) -> None:
     """Initialize the conversation manager with a storage directory."""
     if storage_dir is None:
-      home = os.path.expanduser("~")
-      storage_dir = os.path.join(home, ".config", "dejavu2-cli", "conversations")
+      storage_dir = Path.home() / ".config" / "dejavu2-cli" / "conversations"
 
     self.storage_dir = Path(storage_dir)
     self.storage_dir.mkdir(parents=True, exist_ok=True)
@@ -377,7 +376,7 @@ class ConversationManager:
     """List all stored conversations with metadata."""
     conversations = []
 
-    for file_path in sorted(self.storage_dir.glob("*.json"), key=os.path.getmtime, reverse=True):
+    for file_path in sorted(self.storage_dir.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
       try:
         with open(file_path, encoding="utf-8") as f:
           data = json.load(f)

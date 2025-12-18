@@ -11,8 +11,22 @@ from unittest.mock import MagicMock, mock_open, patch
 import pytest
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-from context import get_knowledgebase_string, get_reference_string
+from context import get_knowledgebase_string, get_reference_string, list_knowledge_bases
 from errors import KnowledgeBaseError, ReferenceError
+
+
+def mock_path_for_context(exists=True, is_dir=True, resolve_to=None, stem=None, name=None):
+  """Create a mock Path object for context.py tests."""
+  mock_path = MagicMock()
+  mock_path.exists.return_value = exists
+  mock_path.is_dir.return_value = is_dir
+  if resolve_to:
+    mock_path.resolve.return_value = MagicMock(__str__=lambda self: resolve_to)
+  if stem:
+    mock_path.stem = stem
+  if name:
+    mock_path.name = name
+  return mock_path
 
 
 class TestContext:
@@ -72,7 +86,7 @@ class TestContext:
     """Test knowledgebase query function."""
     with patch("context.validate_knowledgebase_query", return_value="safe query"):
       with patch("context.validate_file_path", side_effect=lambda x, must_exist=False: x):
-        with patch("os.path.exists", return_value=True):
+        with patch("context.Path", return_value=mock_path_for_context(exists=True)):
           with patch("context.get_knowledgebase_subprocess") as mock_subprocess:
             # Mock the subprocess properly with a run method
             mock_proc = MagicMock()
@@ -96,7 +110,7 @@ class TestContext:
     """Test knowledgebase query function when subprocess fails."""
     with patch("context.validate_knowledgebase_query", return_value="safe query"):
       with patch("context.validate_file_path", side_effect=lambda x, must_exist=False: x):
-        with patch("os.path.exists", return_value=True):
+        with patch("context.Path", return_value=mock_path_for_context(exists=True)):
           with patch("context.get_knowledgebase_subprocess", side_effect=Exception("KB error")):
             with pytest.raises(KnowledgeBaseError):
               get_knowledgebase_string(
@@ -218,10 +232,9 @@ class TestContext:
 
     with patch("context.validate_knowledgebase_query") as mock_validate_query, patch(
       "context.validate_file_path"
-    ) as mock_validate_path, patch("os.path.exists") as mock_exists, patch("context.get_knowledgebase_subprocess") as mock_get_subprocess:
+    ) as mock_validate_path, patch("context.Path", return_value=mock_path_for_context(exists=True)), patch("context.get_knowledgebase_subprocess") as mock_get_subprocess:
       mock_validate_query.return_value = "test query"
       mock_validate_path.side_effect = lambda path, must_exist=False: path
-      mock_exists.return_value = True
 
       mock_subprocess = MagicMock()
       mock_subprocess.config.environment_whitelist = []
@@ -233,14 +246,34 @@ class TestContext:
 
   def test_list_knowledge_bases_success(self):
     """Test successful listing of knowledgebases."""
-    from context import list_knowledge_bases
+    from pathlib import Path as RealPath
 
-    with patch("os.path.isdir") as mock_isdir, patch("context.glob") as mock_glob, patch("os.path.realpath") as mock_realpath, patch(
+    class MockPath:
+      """Mock Path that supports / operator and resolve()."""
+
+      def __init__(self, path):
+        self.path = str(path)
+
+      def is_dir(self):
+        return True
+
+      def resolve(self):
+        return self.path
+
+      def __truediv__(self, other):
+        return MockPath(f"{self.path}/{other}")
+
+      def __str__(self):
+        return self.path
+
+      @property
+      def stem(self):
+        return RealPath(self.path).stem
+
+    with patch("context.Path", MockPath), patch("context.glob") as mock_glob, patch(
       "click.echo"
     ) as mock_echo:
-      mock_isdir.return_value = True
       mock_glob.return_value = ["/var/lib/vectordbs/okusi/test1.cfg", "/var/lib/vectordbs/okusi/test2.cfg", "/var/lib/vectordbs/test3.cfg"]
-      mock_realpath.side_effect = lambda x: x
 
       result = list_knowledge_bases("/var/lib/vectordbs")
 
@@ -252,10 +285,7 @@ class TestContext:
 
   def test_list_knowledge_bases_invalid_dir(self):
     """Test that KnowledgeBaseError is raised when directory is invalid."""
-    from context import list_knowledge_bases
 
-    with patch("os.path.isdir") as mock_isdir:
-      mock_isdir.return_value = False
-
+    with patch("context.Path", return_value=mock_path_for_context(is_dir=False)):
       with pytest.raises(KnowledgeBaseError, match="not a valid directory"):
         list_knowledge_bases("/invalid/path")

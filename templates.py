@@ -9,6 +9,7 @@ Templates define reusable configurations for LLM queries.
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import click
@@ -67,12 +68,12 @@ def load_template_data(template_path: str, force_reload: bool = False) -> dict[s
 
   try:
     # Check if file exists and get modification time
-    if not os.path.exists(template_path):
+    if not Path(template_path).exists():
       error_msg = f"Template file not found: {template_path}"
       logger.error(error_msg)
       raise ConfigurationError(error_msg)
 
-    current_mtime = os.path.getmtime(template_path)
+    current_mtime = Path(template_path).stat().st_mtime
 
     # Use cached version if available and file hasn't changed
     if not force_reload and template_path in _templates_cache:

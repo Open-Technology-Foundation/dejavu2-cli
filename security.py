@@ -136,10 +136,10 @@ def validate_editor_path(editor_path: str) -> str:
       raise ValidationError(f"Invalid editor path: {e}")
 
   # Verify file exists and is executable
-  if not os.path.exists(resolved_path):
+  if not Path(resolved_path).exists():
     raise ValidationError(f"Editor not found: {resolved_path}")
 
-  if not os.path.isfile(resolved_path):
+  if not Path(resolved_path).is_file():
     raise ValidationError(f"Editor path is not a file: {resolved_path}")
 
   if not os.access(resolved_path, os.X_OK):
@@ -187,7 +187,7 @@ def validate_file_path(file_path: str, must_exist: bool = False) -> str:
     raise ValidationError(f"Invalid file path: {e}")
 
   # Check existence if required
-  if must_exist and not os.path.exists(resolved_path):
+  if must_exist and not Path(resolved_path).exists():
     raise ValidationError(f"File does not exist: {resolved_path}")
 
   logger.debug(f"Validated file path: {resolved_path}")
@@ -289,7 +289,7 @@ class SecureSubprocess:
   def _is_allowed_command(self, command: str) -> bool:
     """Check if command is in whitelist."""
     # Extract just the command name (not full path)
-    cmd_name = os.path.basename(command)
+    cmd_name = Path(command).name
 
     # Also check the full command for exact matches
     return cmd_name in self.config.allowed_commands or command in self.config.allowed_commands

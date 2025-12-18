@@ -13,6 +13,7 @@ import logging
 import os
 import shutil
 import tempfile
+from pathlib import Path
 from typing import Any
 
 import click
@@ -44,7 +45,7 @@ def load_config(default_config_path, user_config_path=None) -> dict[str, Any]:
 
   # Load default configuration (required)
   logger.debug(f"Loading default config from: {default_config_path}")
-  if not os.path.exists(default_config_path):
+  if not Path(default_config_path).exists():
     error_msg = f"Default config not found: {default_config_path}"
     logger.error(error_msg)
     click.echo(f"Error: {error_msg}", err=True)
@@ -77,7 +78,7 @@ def load_config(default_config_path, user_config_path=None) -> dict[str, Any]:
     raise
 
   # Update with user configuration if it exists
-  if user_config_path and os.path.exists(user_config_path):
+  if user_config_path and Path(user_config_path).exists():
     logger.debug(f"Loading user config from: {user_config_path}")
     try:
       with open(user_config_path, encoding="utf-8") as f:
@@ -184,7 +185,7 @@ def edit_yaml_file(filename: str) -> None:
             break
     finally:
       # Clean up temporary file
-      if os.path.exists(temp_path):
+      if Path(temp_path).exists():
         os.unlink(temp_path)
 
   except ValidationError as e:
@@ -254,7 +255,7 @@ def edit_json_file(filename: str) -> None:
             break
     finally:
       # Clean up temporary file
-      if os.path.exists(temp_path):
+      if Path(temp_path).exists():
         os.unlink(temp_path)
 
   except ValidationError as e:

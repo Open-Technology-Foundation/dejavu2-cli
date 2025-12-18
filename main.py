@@ -9,6 +9,7 @@ to create the complete functionality of the dejavu2-cli tool.
 import logging
 import os
 import sys
+from pathlib import Path
 from typing import Any
 
 import click
@@ -26,7 +27,7 @@ from errors import ConfigurationError, ConversationError, KnowledgeBaseError, Mo
 from utils import setup_logging
 
 # Constants
-SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+SCRIPT_DIR = Path(__file__).resolve().parent
 # Import version from version.py module
 try:
   from version import __version__ as VERSION
@@ -34,9 +35,9 @@ except ImportError:
   VERSION = "unknown"
   click.echo("Warning: version.py not found. Using 'unknown'.", err=True)
 
-SCRIPT_NAME = os.path.splitext(os.path.basename(__file__))[0]
-DEFAULT_CONFIG_PATH = os.path.join(SCRIPT_DIR, "defaults.yaml")
-USER_CONFIG_PATH = os.path.expanduser("~/.config/dejavu2-cli/config.yaml")
+SCRIPT_NAME = Path(__file__).stem
+DEFAULT_CONFIG_PATH = SCRIPT_DIR / "defaults.yaml"
+USER_CONFIG_PATH = Path.home() / ".config/dejavu2-cli/config.yaml"
 
 # Setup logging will be done later with command line arguments
 logger = None
@@ -77,15 +78,15 @@ def setup_application(kwargs: dict[str, Any]) -> tuple:
   # Log startup information
   logger.info(f"Starting dejavu2-cli v{VERSION}")
   logger.debug(f"Python version: {sys.version}")
-  logger.debug(f"Working directory: {os.getcwd()}")
+  logger.debug(f"Working directory: {Path.cwd()}")
 
   # Load configuration
   config = load_config(DEFAULT_CONFIG_PATH, USER_CONFIG_PATH)
   config_logger.debug(f"Configuration loaded from {config.get('config_file', 'defaults')}")
 
-  # Set up paths
-  template_path = os.path.join(SCRIPT_DIR, config["paths"]["template_path"])
-  models_json_path = os.path.join(SCRIPT_DIR, "Models.json")
+  # Set up paths (convert to str for backward compatibility)
+  template_path = str(SCRIPT_DIR / config["paths"]["template_path"])
+  models_json_path = str(SCRIPT_DIR / "Models.json")
   customkb_executable = config["paths"].get("customkb", "/ai/scripts/customkb/customkb")
   vectordbs_path = config.get("vectordbs_path", "/var/lib/vectordbs")
 
@@ -331,7 +332,7 @@ def handle_conversation_export(kwargs: dict[str, Any], conv_manager: Any) -> Non
           return
 
       # Use current directory if no path specified
-      output_path = os.path.join(os.getcwd(), filename)
+      output_path = str(Path.cwd() / filename)
 
     # Export the conversation to file
     result = conv_manager.export_conversation_to_markdown(conv_id, output_path)
@@ -632,7 +633,7 @@ def process_reference_and_knowledge(kwargs: dict[str, Any], paths: dict[str, str
         # Handle format like "okusi/okusiassociates" by converting to full path
         kb_parts = kb_path.split("/")
         if len(kb_parts) == 2:
-          kb_path = os.path.join(paths["vectordbs_path"], kb_parts[0], f"{kb_parts[1]}.cfg")
+          kb_path = str(Path(paths["vectordbs_path"]) / kb_parts[0] / f"{kb_parts[1]}.cfg")
 
       # Check if we should bypass knowledgebase errors and continue anyway
       bypass_kb_errors = os.environ.get("DV2_BYPASS_KB_ERRORS", "false").lower() == "true"
@@ -997,9 +998,7 @@ def handle_file_output(query_context: dict[str, Any], query_text: str, query_res
   if query_context["output_dir"]:
     safe_query = "".join(c for c in query_text[:100] if c.isalnum() or c in (" ", "_")).rstrip()
     safe_query = post_slug(safe_query, "-", False, 60)
-    filename = os.path.join(
-      query_context["output_dir"], f"dv2_{query_context['project_name']}_{int(time.time())}_{output_order + 1}_{safe_query}.txt"
-    )
+    filename = str(Path(query_context["output_dir"]) / f"dv2_{query_context['project_name']}_{int(time.time())}_{output_order + 1}_{safe_query}.txt")
 
     with open(filename, "w", encoding="utf-8") as file:
       file.write(f"---User:\n\n{query_text.strip()}\n\n")
@@ -1019,7 +1018,7 @@ def write_combined_output_file(query_context: dict[str, Any], output_files: list
     output_files: List of output file paths
   """
   if len(output_files) > 1:
-    filename_cot = os.path.join(query_context["output_dir"], f"dv2_{query_context['project_name']}_{int(time.time())}_0_.txt")
+    filename_cot = str(Path(query_context["output_dir"]) / f"dv2_{query_context['project_name']}_{int(time.time())}_0_.txt")
     # Open the combined file in write mode
     with open(filename_cot, "w", encoding="utf-8") as cot_file:
       for filename in output_files:

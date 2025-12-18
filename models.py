@@ -9,6 +9,7 @@ as well as listing and displaying model information.
 import json
 import logging
 import os
+from pathlib import Path
 from typing import Any
 
 import click
@@ -48,7 +49,7 @@ def load_models_json(json_file: str, force_reload: bool = False) -> dict[str, An
 
   try:
     # Check if file has been modified
-    current_mtime = os.path.getmtime(json_file)
+    current_mtime = Path(json_file).stat().st_mtime
 
     # Use cached version if available and file hasn't changed
     if not force_reload and json_file in _models_cache:
