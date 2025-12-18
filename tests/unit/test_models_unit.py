@@ -5,7 +5,7 @@ Unit tests for model handling in dejavu2-cli.
 import json
 import os
 import sys
-from unittest.mock import MagicMock, mock_open, patch
+from unittest.mock import mock_open, patch
 
 import pytest
 

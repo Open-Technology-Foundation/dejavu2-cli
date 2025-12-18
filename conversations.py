@@ -26,7 +26,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from errors import ConversationError
 
@@ -42,7 +42,7 @@ class Message:
   content: str
   timestamp: datetime | None = None
 
-  def __post_init__(self):
+  def __post_init__(self) -> None:
     if self.timestamp is None:
       self.timestamp = datetime.now()
 
@@ -87,7 +87,7 @@ class Conversation:
   updated_at: datetime | None = None
   metadata: dict[str, Any] = field(default_factory=dict)
 
-  def __post_init__(self):
+  def __post_init__(self) -> None:
     if self.created_at is None:
       self.created_at = datetime.now()
     if self.updated_at is None:
@@ -258,7 +258,7 @@ class Conversation:
 class ConversationManager:
   """Manages conversation storage, retrieval, and manipulation."""
 
-  def __init__(self, storage_dir: str | None = None):
+  def __init__(self, storage_dir: str | None = None) -> None:
     """Initialize the conversation manager with a storage directory."""
     if storage_dir is None:
       home = os.path.expanduser("~")
@@ -564,7 +564,7 @@ class ConversationManager:
 
     return result
 
-  def suggest_title_from_content(self, conversation: Conversation, query_function: callable, max_length: int = 60) -> str:
+  def suggest_title_from_content(self, conversation: Conversation, query_function: Callable[[str], str], max_length: int = 60) -> str:
     """Use the LLM to suggest a title for the conversation."""
     # Only try to generate title if we have at least one user and one assistant message
     user_msgs = [m for m in conversation.messages if m.role == "user"]

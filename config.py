@@ -13,6 +13,7 @@ import logging
 import os
 import shutil
 import tempfile
+from typing import Any
 
 import click
 import yaml
@@ -24,7 +25,7 @@ from security import SecurityError, ValidationError, get_editor_subprocess, vali
 logger = logging.getLogger(__name__)
 
 
-def load_config(default_config_path, user_config_path=None):
+def load_config(default_config_path, user_config_path=None) -> dict[str, Any]:
   """
   Load and return configuration from default and user YAML files.
 
@@ -130,7 +131,7 @@ def load_config(default_config_path, user_config_path=None):
   return config
 
 
-def edit_yaml_file(filename: str):
+def edit_yaml_file(filename: str) -> None:
   """
   Edit the specified YAML file using the system's default editor or 'nano'.
 
@@ -200,7 +201,7 @@ def edit_yaml_file(filename: str):
     raise
 
 
-def edit_json_file(filename: str):
+def edit_json_file(filename: str) -> None:
   """
   Edit the specified JSON file using the system's default editor or 'nano'.
 

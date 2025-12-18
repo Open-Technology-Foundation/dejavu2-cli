@@ -7,11 +7,10 @@ increments version numbers according to semantic versioning rules.
 """
 
 import os
-import re
 import sys
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 

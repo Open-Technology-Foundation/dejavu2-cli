@@ -480,7 +480,6 @@ class TestGoogleGeminiProvider:
   @patch("multiprocessing.get_context")
   def test_query_gemini_subprocess_error(self, mock_get_context):
     """Test Gemini query subprocess error handling."""
-    from errors import APIError
 
     mock_ctx = MagicMock()
     mock_pool = MagicMock()
@@ -503,7 +502,6 @@ class TestGoogleGeminiProvider:
   @patch("multiprocessing.get_context")
   def test_run_gemini_query_exception(self, mock_get_context):
     """Test Gemini query exception handling for invalid responses."""
-    from errors import APIError
 
     mock_ctx = MagicMock()
     mock_pool = MagicMock()
