@@ -2,7 +2,7 @@
 Provider modules for Claude-based model updates
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 
 class BaseProvider:

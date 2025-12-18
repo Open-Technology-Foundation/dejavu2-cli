@@ -21,12 +21,12 @@ Classes:
 import fcntl
 import json
 import logging
-import os
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from errors import ConversationError
 
@@ -310,11 +310,11 @@ class ConversationManager:
     except OSError as e:
       error_msg = f"Error reading conversation file {conv_id}: {str(e)}"
       logger.error(error_msg)
-      raise ConversationError(error_msg)
+      raise ConversationError(error_msg) from e
     except json.JSONDecodeError as e:
       error_msg = f"Invalid JSON in conversation file {conv_id}: {str(e)}"
       logger.error(error_msg)
-      raise ConversationError(error_msg)
+      raise ConversationError(error_msg) from e
 
     try:
       # Sanitize message content to ensure they're strings
@@ -336,7 +336,7 @@ class ConversationManager:
     except (KeyError, ValueError, TypeError) as e:
       error_msg = f"Invalid conversation data format in {conv_id}: {str(e)}"
       logger.error(error_msg)
-      raise ConversationError(error_msg)
+      raise ConversationError(error_msg) from e
 
   def save_conversation(self, conv: Conversation | None = None) -> None:
     """Save a conversation to storage."""
@@ -362,15 +362,15 @@ class ConversationManager:
     except BlockingIOError as e:
       error_msg = f"Conversation file locked by another process {conv.id}: {str(e)}"
       logger.error(error_msg)
-      raise ConversationError(error_msg)
+      raise ConversationError(error_msg) from e
     except OSError as e:
       error_msg = f"Error writing conversation file {conv.id}: {str(e)}"
       logger.error(error_msg)
-      raise ConversationError(error_msg)
+      raise ConversationError(error_msg) from e
     except (TypeError, ValueError) as e:
       error_msg = f"Error serializing conversation {conv.id}: {str(e)}"
       logger.error(error_msg)
-      raise ConversationError(error_msg)
+      raise ConversationError(error_msg) from e
 
   def list_conversations(self) -> list[dict[str, Any]]:
     """List all stored conversations with metadata."""
@@ -413,7 +413,7 @@ class ConversationManager:
     except OSError as e:
       error_msg = f"Error deleting conversation {conv_id}: {str(e)}"
       logger.error(error_msg)
-      raise ConversationError(error_msg)
+      raise ConversationError(error_msg) from e
 
   def get_most_recent_conversation(self) -> Conversation | None:
     """Get the most recently modified conversation."""
@@ -457,7 +457,7 @@ class ConversationManager:
       except OSError as e:
         error_msg = f"Failed to write markdown file: {str(e)}"
         logger.error(error_msg)
-        raise ConversationError(error_msg)
+        raise ConversationError(error_msg) from e
 
     # Otherwise just return the markdown content
     return md_content

@@ -8,7 +8,6 @@ Templates define reusable configurations for LLM queries.
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -100,11 +99,11 @@ def load_template_data(template_path: str, force_reload: bool = False) -> dict[s
   except OSError as e:
     error_msg = f"Error reading template file {template_path}: {str(e)}"
     logger.error(error_msg)
-    raise ConfigurationError(error_msg)
+    raise ConfigurationError(error_msg) from e
   except json.JSONDecodeError as e:
     error_msg = f"Invalid JSON in template file {template_path}: {str(e)}"
     logger.error(error_msg)
-    raise TemplateError(error_msg)
+    raise TemplateError(error_msg) from e
 
 
 def get_template(template_key: str, template_path: str) -> tuple[str, dict[str, Any]]:

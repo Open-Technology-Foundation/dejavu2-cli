@@ -8,7 +8,6 @@ as well as listing and displaying model information.
 
 import json
 import logging
-import os
 from pathlib import Path
 from typing import Any
 
@@ -68,18 +67,18 @@ def load_models_json(json_file: str, force_reload: bool = False) -> dict[str, An
     logger.debug(f"Successfully loaded and cached {len(models)} models from file")
     return models
 
-  except FileNotFoundError:
+  except FileNotFoundError as e:
     error_msg = f"Models file not found: {json_file}"
     logger.error(error_msg)
-    raise ConfigurationError(error_msg)
+    raise ConfigurationError(error_msg) from e
   except json.JSONDecodeError as e:
     error_msg = f"Invalid JSON in models file '{json_file}': {str(e)}"
     logger.error(error_msg)
-    raise ConfigurationError(error_msg)
+    raise ConfigurationError(error_msg) from e
   except Exception as e:
     error_msg = f"Error loading models file '{json_file}': {str(e)}"
     logger.error(error_msg)
-    raise ConfigurationError(error_msg)
+    raise ConfigurationError(error_msg) from e
 
 
 def list_available_canonical_models(json_file: str) -> list[str]:

@@ -133,7 +133,7 @@ def validate_editor_path(editor_path: str) -> str:
     try:
       resolved_path = str(Path(editor_path).resolve())
     except (OSError, ValueError) as e:
-      raise ValidationError(f"Invalid editor path: {e}")
+      raise ValidationError(f"Invalid editor path: {e}") from e
 
   # Verify file exists and is executable
   if not Path(resolved_path).exists():
@@ -184,7 +184,7 @@ def validate_file_path(file_path: str, must_exist: bool = False) -> str:
   try:
     resolved_path = str(Path(file_path).resolve())
   except (OSError, ValueError) as e:
-    raise ValidationError(f"Invalid file path: {e}")
+    raise ValidationError(f"Invalid file path: {e}") from e
 
   # Check existence if required
   if must_exist and not Path(resolved_path).exists():
@@ -261,13 +261,13 @@ class SecureSubprocess:
 
     try:
       return subprocess.run(cmd_list, **secure_kwargs)
-    except subprocess.TimeoutExpired:
-      raise SecurityError(f"Command timed out after {self.config.timeout}s")
+    except subprocess.TimeoutExpired as e:
+      raise SecurityError(f"Command timed out after {self.config.timeout}s") from e
     except subprocess.CalledProcessError as e:
       # Re-raise with more context but don't expose sensitive details
-      raise SecurityError(f"Command failed with exit code {e.returncode}")
+      raise SecurityError(f"Command failed with exit code {e.returncode}") from e
     except Exception as e:
-      raise SecurityError(f"Subprocess execution failed: {e}")
+      raise SecurityError(f"Subprocess execution failed: {e}") from e
 
   def _validate_command(self, cmd_list: list[str]) -> None:
     """Validate command for security issues."""

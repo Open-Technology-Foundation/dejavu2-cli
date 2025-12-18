@@ -47,7 +47,6 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 import anthropic
 import openai
 from google import genai
-from google.genai import types as genai_types
 from anthropic import Anthropic
 from openai import OpenAI
 
@@ -276,25 +275,25 @@ def query_anthropic(
     raise
   except anthropic.AuthenticationError as e:
     logger.error(f"{model} authentication failed: {e}")
-    raise AuthenticationError(f"Invalid Anthropic API key for {model}: {e}")
+    raise AuthenticationError(f"Invalid Anthropic API key for {model}: {e}") from e
   except anthropic.RateLimitError as e:
     logger.error(f"{model} rate limit exceeded: {e}")
-    raise APIError(f"Rate limit exceeded for {model}: {e}")
+    raise APIError(f"Rate limit exceeded for {model}: {e}") from e
   except anthropic.BadRequestError as e:
     logger.error(f"{model} bad request: {e}")
-    raise APIError(f"Bad request for {model}: {e}")
+    raise APIError(f"Bad request for {model}: {e}") from e
   except anthropic.APIConnectionError as e:
     logger.error(f"{model} connection error: {e}")
-    raise APIError(f"Connection error for {model}: {e}")
+    raise APIError(f"Connection error for {model}: {e}") from e
   except anthropic.InternalServerError as e:
     logger.error(f"{model} server error: {e}")
-    raise APIError(f"Anthropic server error for {model}: {e}")
+    raise APIError(f"Anthropic server error for {model}: {e}") from e
   except anthropic.APIStatusError as e:
     logger.error(f"{model} API status error: {e}")
-    raise APIError(f"Anthropic API error for {model}: {e}")
+    raise APIError(f"Anthropic API error for {model}: {e}") from e
   except (IndexError, AttributeError) as e:
     logger.error(f"{model} response extraction error: {e}")
-    raise APIError(f"Invalid response format from {model}: {e}")
+    raise APIError(f"Invalid response format from {model}: {e}") from e
 
 
 # OpenAI model capability detection functions
@@ -555,24 +554,24 @@ def query_openai(
     raise
   except openai.AuthenticationError as e:
     logger.error(f"{model} authentication failed: {e}")
-    raise AuthenticationError(f"Invalid OpenAI API key for {model}: {e}")
+    raise AuthenticationError(f"Invalid OpenAI API key for {model}: {e}") from e
   except openai.RateLimitError as e:
     logger.error(f"{model} rate limit exceeded: {e}")
-    raise APIError(f"Rate limit exceeded for {model}: {e}")
+    raise APIError(f"Rate limit exceeded for {model}: {e}") from e
   except openai.BadRequestError as e:
     logger.error(f"{model} bad request: {e}")
-    raise APIError(f"Bad request for {model}: {e}")
+    raise APIError(f"Bad request for {model}: {e}") from e
   except openai.APIConnectionError as e:
     logger.error(f"{model} connection error: {e}")
-    raise APIError(f"Connection error for {model}: {e}")
+    raise APIError(f"Connection error for {model}: {e}") from e
   except openai.APIStatusError as e:
     logger.error(f"{model} API status error (status {e.status_code}): {e}")
     if e.status_code >= 500:
-      raise APIError(f"OpenAI server error for {model}: {e}")
-    raise APIError(f"OpenAI API error for {model}: {e}")
+      raise APIError(f"OpenAI server error for {model}: {e}") from e
+    raise APIError(f"OpenAI API error for {model}: {e}") from e
   except (AttributeError, KeyError, IndexError) as e:
     logger.error(f"{model} response extraction error: {e}")
-    raise APIError(f"Invalid response format from {model}: {e}")
+    raise APIError(f"Invalid response format from {model}: {e}") from e
 
 
 def prepare_llama_messages(query_text: str, systemprompt: str, conversation_messages: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
@@ -692,7 +691,7 @@ def execute_llama_request(request_url: str, headers: dict[str, str], request_par
 
   except requests.RequestException as e:
     logger.error(f"HTTP request failed: {e}")
-    raise ValueError(f"Connection error: {e}")
+    raise ValueError(f"Connection error: {e}") from e
 
 
 def process_llama_response(response: requests.Response, model: str) -> str:
@@ -750,7 +749,7 @@ def process_llama_response(response: requests.Response, model: str) -> str:
     if not (response_text.strip().startswith("{") or response_text.strip().startswith("[")):
       return response_text
 
-    raise ValueError(f"Failed to parse response from Ollama API: {e}")
+    raise ValueError(f"Failed to parse response from Ollama API: {e}") from e
 
   # If we got here, we couldn't extract the content
   raise ValueError("Failed to extract content from Ollama API response")
@@ -803,13 +802,13 @@ def query_llama(
 
   except ValueError as e:
     logger.error(f"{model} query failed (invalid parameters): {e}")
-    raise APIError(f"Ollama query error for {model}: {e}")
+    raise APIError(f"Ollama query error for {model}: {e}") from e
   except requests.RequestException as e:
     logger.error(f"{model} query failed (connection error): {e}")
-    raise APIError(f"Ollama connection error for {model}: {e}")
+    raise APIError(f"Ollama connection error for {model}: {e}") from e
   except json.JSONDecodeError as e:
     logger.error(f"{model} query failed (invalid JSON response): {e}")
-    raise APIError(f"Ollama response parsing error for {model}: {e}")
+    raise APIError(f"Ollama response parsing error for {model}: {e}") from e
 
 
 def _parse_streaming_response(response_text: str) -> str:
@@ -1036,19 +1035,19 @@ def query_gemini(
   except ValueError as ve:
     # Specific handling for API key issues
     if "api_key" in str(ve).lower():
-      raise AuthenticationError(f"Invalid Google API key: {ve}")
-    raise ve
+      raise AuthenticationError(f"Invalid Google API key: {ve}") from ve
+    raise
   except Exception as e:
     # Log and re-raise with additional context
     logger.error(f"{model} query failed: {e}")
     error_str = str(e).lower()
     if "authentication" in error_str or "api_key" in error_str:
-      raise AuthenticationError(f"Authentication failed for {model}: Invalid/expired Google API key")
+      raise AuthenticationError(f"Authentication failed for {model}: Invalid/expired Google API key") from e
     elif "quota" in error_str or "rate limit" in error_str:
-      raise APIError(f"Rate limit or quota exceeded for {model}")
+      raise APIError(f"Rate limit or quota exceeded for {model}") from e
 
     # Re-raise as APIError with context
-    raise APIError(f"Google API error for {model}: {e}")
+    raise APIError(f"Google API error for {model}: {e}") from e
 
 
 def get_available_gemini_models(api_key: str) -> list[str]:

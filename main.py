@@ -926,6 +926,9 @@ def handle_conversation_response(query_context: dict[str, Any], conv_manager, qu
     - Saves conversation to persistent storage
     - Logs conversation save events
   """
+  # Lazy import for title generation
+  from llm_clients import query
+
   active_conversation = query_context["active_conversation"]
   kwargs = query_context["kwargs"]
 
@@ -1017,6 +1020,8 @@ def write_combined_output_file(query_context: dict[str, Any], output_files: list
     query_context: Dictionary containing query context
     output_files: List of output file paths
   """
+  import time
+
   if len(output_files) > 1:
     filename_cot = str(Path(query_context["output_dir"]) / f"dv2_{query_context['project_name']}_{int(time.time())}_0_.txt")
     # Open the combined file in write mode

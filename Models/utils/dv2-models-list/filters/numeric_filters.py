@@ -49,8 +49,8 @@ class NumericFilter(Filter):
         return int(value)
       else:
         return float(value)
-    except (ValueError, TypeError):
-      raise ValueError(f"Cannot convert to number: {value}")
+    except (ValueError, TypeError) as e:
+      raise ValueError(f"Cannot convert to number: {value}") from e
 
   def matches(self, model_data: dict[str, Any]) -> bool:
     """Check if the model data matches this numeric filter."""
