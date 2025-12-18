@@ -206,7 +206,7 @@ def query_anthropic(
   model: str,
   temperature: float,
   max_tokens: int,
-  conversation_messages: list[dict[str, str]] = None,
+  conversation_messages: list[dict[str, str]] | None = None,
 ) -> str:
   """
   Send a query to the Anthropic API and return the response.
@@ -457,7 +457,7 @@ def _extract_content_from_response(data: dict[str, Any]) -> str:
 
 
 def query_openai(
-  client: OpenAI, query: str, system: str, model: str, temperature: float, max_tokens: int, conversation_messages: list[dict[str, str]] = None
+  client: OpenAI, query: str, system: str, model: str, temperature: float, max_tokens: int, conversation_messages: list[dict[str, str]] | None = None
 ) -> str:
   """
   Send a query to the OpenAI API using the Responses API.
@@ -575,7 +575,7 @@ def query_openai(
     raise APIError(f"Invalid response format from {model}: {e}")
 
 
-def prepare_llama_messages(query_text: str, systemprompt: str, conversation_messages: list[dict[str, str]] = None) -> list[dict[str, str]]:
+def prepare_llama_messages(query_text: str, systemprompt: str, conversation_messages: list[dict[str, str]] | None = None) -> list[dict[str, str]]:
   """
   Prepare message list for LLaMA query.
 
@@ -604,7 +604,7 @@ def prepare_llama_messages(query_text: str, systemprompt: str, conversation_mess
 
 
 def prepare_llama_request(
-  client: OpenAI, model: str, messages: list[dict[str, str]], temperature: float, max_tokens: int, api_keys: dict[str, str] = None
+  client: OpenAI, model: str, messages: list[dict[str, str]], temperature: float, max_tokens: int, api_keys: dict[str, str] | None = None
 ) -> tuple:
   """
   Prepare request parameters for LLaMA query.
@@ -763,8 +763,8 @@ def query_llama(
   model: str,
   temperature: float,
   max_tokens: int,
-  conversation_messages: list[dict[str, str]] = None,
-  api_keys: dict[str, str] = None,
+  conversation_messages: list[dict[str, str]] | None = None,
+  api_keys: dict[str, str] | None = None,
 ) -> str:
   """
   Send a query to a local or remote LLaMA-based model via an Ollama server.
@@ -977,7 +977,7 @@ def _run_gemini_query_in_process(query_data):
 
 
 def query_gemini(
-  query: str, system: str, model: str, temperature: float, max_tokens: int, api_key: str, conversation_messages: list[dict[str, str]] = None
+  query: str, system: str, model: str, temperature: float, max_tokens: int, api_key: str, conversation_messages: list[dict[str, str]] | None = None
 ) -> str:
   """
   Send a query to the Google Gemini API and return the response.

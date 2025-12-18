@@ -40,7 +40,7 @@ class Message:
 
   role: str  # "user", "assistant", or "system"
   content: str
-  timestamp: datetime = None
+  timestamp: datetime | None = None
 
   def __post_init__(self):
     if self.timestamp is None:
@@ -83,8 +83,8 @@ class Conversation:
   id: str
   title: str | None = None
   messages: list[Message] = field(default_factory=list)
-  created_at: datetime = None
-  updated_at: datetime = None
+  created_at: datetime | None = None
+  updated_at: datetime | None = None
   metadata: dict[str, Any] = field(default_factory=dict)
 
   def __post_init__(self):
@@ -258,7 +258,7 @@ class Conversation:
 class ConversationManager:
   """Manages conversation storage, retrieval, and manipulation."""
 
-  def __init__(self, storage_dir: str = None):
+  def __init__(self, storage_dir: str | None = None):
     """Initialize the conversation manager with a storage directory."""
     if storage_dir is None:
       home = os.path.expanduser("~")
@@ -270,7 +270,7 @@ class ConversationManager:
 
     logger.debug(f"Conversation storage directory: {self.storage_dir}")
 
-  def new_conversation(self, system_prompt: str = None, title: str = None, metadata: dict[str, Any] = None) -> Conversation:
+  def new_conversation(self, system_prompt: str | None = None, title: str | None = None, metadata: dict[str, Any] | None = None) -> Conversation:
     """Create a new conversation.
 
     Args:
@@ -426,7 +426,7 @@ class ConversationManager:
     most_recent_id = conversations[0]["id"]
     return self.load_conversation(most_recent_id)
 
-  def export_conversation_to_markdown(self, conv_id: str = None, output_path: str = None) -> str:
+  def export_conversation_to_markdown(self, conv_id: str | None = None, output_path: str | None = None) -> str:
     """
     Export a conversation to markdown format.
 
