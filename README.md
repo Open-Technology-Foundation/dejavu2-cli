@@ -22,30 +22,30 @@ A powerful command-line interface for interacting with various Large Language Mo
 
 `dejavu2-cli` (also available as `dv2`) is a versatile command-line tool for executing queries to multiple language models from various providers. It provides a unified interface for AI interactions with support for conversation history, contextual inputs, customizable parameters, and agent templates.
 
-**Current Version**: 0.8.30
+**Current Version**: 0.8.39
 
 ## Features
 
 ### Core Capabilities
-- **Multi-Provider Support**: Seamlessly interact with models from OpenAI, Anthropic, Google, Meta, xAI, and local Ollama instances
+- **Multi-Provider Support**: OpenAI (GPT-4/5, O1/O3/O4), Anthropic (Claude 3.5/4), Google (Gemini 2.0/2.5), Ollama
 - **Unified Interface**: Single CLI for all LLM providers with consistent parameter handling
-- **Conversation Management**: Maintain context across sessions with persistent conversation history
+- **Conversation Management**: Persistent history with file locking for concurrent access safety
 - **Agent Templates**: Pre-configured AI personas with specialized capabilities
 - **Context Enhancement**: Include reference files and knowledgebases in queries
-- **Security-First Design**: Built-in input validation and secure subprocess execution
+- **Security-First Design**: Input validation, secure subprocess execution, SDK-specific exception handling
 
 ### Advanced Features
-- **Model Registry**: Comprehensive database of 100+ models with aliases and metadata
-- **Smart Parameter Handling**: Automatic adjustment for model-specific requirements (e.g., O1/O3 models)
+- **Model Registry**: 60+ models with aliases and metadata across all providers
+- **Smart Parameter Handling**: Automatic adjustment for model-specific requirements (O-series reasoning, Gemini configs)
 - **Multiple Output Formats**: Export conversations to markdown, view in various formats
-- **Robust Error Handling**: Graceful degradation with meaningful error messages
+- **Robust Error Handling**: SDK-specific exceptions with graceful degradation
 - **Extensible Architecture**: Modular design for easy feature additions
 
 ## Installation
 
 ### Prerequisites
 
-- Python 3.7 or higher (3.8+ recommended)
+- Python 3.9 or higher (3.10+ recommended)
 - pip package manager
 - Git (for cloning the repository)
 - API keys for desired LLM providers
@@ -127,14 +127,15 @@ Core Modules:
 
 #### LLM Clients (`llm_clients.py`)
 Handles API interactions with different providers:
-- **OpenAI**: Standard and O1/O3 model support with parameter adjustments
-- **Anthropic**: Claude models with native API integration
-- **Google**: Gemini models via generativeai library
+- **OpenAI**: GPT-4/5 and O-series (O1/O3/O4) with Responses API and reasoning effort config
+- **Anthropic**: Claude 3.5/4 models with beta headers for extended thinking
+- **Google**: Gemini 2.0/2.5 via `google-genai` SDK with subprocess isolation for GRPC
 - **Ollama**: Local and remote server support with robust response parsing
 
 #### Conversation Management (`conversations.py`)
 Persistent conversation storage with:
 - JSON-based storage in `~/.config/dejavu2-cli/conversations/`
+- File locking (`fcntl.flock`) for concurrent access safety
 - Message history with metadata tracking
 - Export capabilities to markdown format
 - Message manipulation (removal, pair deletion)
@@ -209,13 +210,14 @@ Each model entry contains:
 
 Example model entry:
 ```json
-"claude-3-7-sonnet-latest": {
-  "model": "claude-3-7-sonnet-latest",
+"claude-sonnet-4-5-20250514": {
+  "model": "claude-sonnet-4-5-20250514",
   "alias": "sonnet",
   "parent": "Anthropic",
+  "family": "anthropic",
   "model_category": "LLM",
   "context_window": 200000,
-  "max_output_tokens": 128000,
+  "max_output_tokens": 64000,
   "vision": 1,
   "available": 9,
   "enabled": 1
@@ -278,7 +280,7 @@ Each agent defines:
 "Leet - Full-Stack Programmer": {
   "category": "Specialist",
   "systemprompt": "You are Leet, an expert full-stack programmer...",
-  "model": "claude-3-7-sonnet-latest",
+  "model": "sonnet",
   "max_tokens": 8000,
   "temperature": 0.35,
   "monospace": true,
@@ -508,6 +510,9 @@ dejavu2-cli/
 - **File Endings**: All Python scripts must end with `#fin`
 
 ### Testing
+
+The test suite includes 320+ tests across unit, integration, and functional categories.
+
 ```bash
 # Run all tests
 ./run_tests.sh
@@ -527,10 +532,11 @@ python -m pytest tests/unit/test_security.py -v
 ### Adding New Features
 
 1. **New LLM Provider**
-   - Add client class to `llm_clients.py`
-   - Update `initialize_clients()` and `query()` functions
-   - Add models to `Models.json`
-   - Create provider update module in `Models/utils/dv2-update-models/providers/`
+   - Add client initialization to `initialize_clients()` in `llm_clients.py`
+   - Add query function (e.g., `query_provider()`) with SDK-specific exception handling
+   - Update `route_query_by_family()` to route to new provider
+   - Add models to `Models.json` with appropriate family/parent fields
+   - Add tests for new provider in `tests/unit/test_llm_clients.py`
 
 2. **New Agent Template**
    - Add entry to `Agents.json`
@@ -619,6 +625,6 @@ Contributions are welcome! Please:
 
 ---
 
-**Current Version**: 0.8.30 | **Status**: Active Development | **Python**: 3.7+
+**Current Version**: 0.8.39 | **Status**: Active Development | **Python**: 3.9+
 
 #fin
