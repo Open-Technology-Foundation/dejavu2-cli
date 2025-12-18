@@ -22,7 +22,7 @@ A powerful command-line interface for interacting with various Large Language Mo
 
 `dejavu2-cli` (also available as `dv2`) is a versatile command-line tool for executing queries to multiple language models from various providers. It provides a unified interface for AI interactions with support for conversation history, contextual inputs, customizable parameters, and agent templates.
 
-**Current Version**: 0.8.39
+**Current Version**: 0.8.40
 
 ## Features
 
@@ -625,6 +625,6 @@ Contributions are welcome! Please:
 
 ---
 
-**Current Version**: 0.8.39 | **Status**: Active Development | **Python**: 3.9+
+**Current Version**: 0.8.40 | **Status**: Active Development | **Python**: 3.9+
 
 #fin
