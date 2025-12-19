@@ -10,4 +10,4 @@ To use the version in other modules:
     from version import __version__
 """
 
-__version__ = "0.8.42"
+__version__ = "0.8.43"
