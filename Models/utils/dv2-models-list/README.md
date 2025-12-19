@@ -13,9 +13,16 @@ A powerful command-line tool for querying, filtering, and analyzing AI models fr
 
 ## Installation
 
-The tool is part of the dejavu2-cli Models utilities. Ensure you have Python 3.6+ installed.
+The tool is part of the dejavu2-cli Models utilities.
+
+**Requirements:**
+- Python 3.12+
+- PyYAML
 
 ```bash
+# Install dependencies
+pip install -r requirements.txt
+
 # Make the script executable (if not already)
 chmod +x dv2-models-list.py
 
@@ -112,7 +119,7 @@ The `-F` option supports various operators for different types of comparisons:
 - `not_contains`: Doesn't contain
 - `starts_with` (or `^`): Starts with
 - `ends_with` (or `$`): Ends with
-- `regex`: Regular expression match
+- `regex`: Regular expression match (max 500 chars, dangerous patterns blocked)
 
 ### Numeric Operators
 - `==`, `!=`: Equal, not equal
@@ -276,6 +283,7 @@ Common fields available for filtering and display:
 - Use `-C` for case-sensitive matching
 - Check operator spelling (e.g., `equals` not `equal`)
 - Verify field names match exactly
+- Field paths must start with a letter or underscore (not numbers or special chars)
 
 ### Performance issues
 - Use `-l` to limit output for large datasets

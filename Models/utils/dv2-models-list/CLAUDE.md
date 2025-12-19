@@ -4,117 +4,90 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Essential Commands
 
-### Running the Tool
 ```bash
-# Basic execution
-./dv2-models-list
+# Run the tool
+./dv2-models-list                              # List all enabled models
+./dv2-models-list -F "parent:equals:OpenAI"    # Filter by provider
+./dv2-models-list -o table -l 10               # Table format, limit 10
+./dv2-models-list -S                           # Show statistics
 
-# With filters
-./dv2-models-list -F "parent:equals:OpenAI" -o table
+# Verify syntax
+python3 -m py_compile dv2-models-list.py
 
-# Show statistics
-./dv2-models-list -S
-
-# Export to JSON
-./dv2-models-list -o json > models.json
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-### Development Setup
-```bash
-# Make script executable
-chmod +x dv2-models-list.py
+## Requirements
 
-# Create development symlink
-ln -sf dv2-models-list.py dv2-models-list
-
-# Python 3.6+ required - check version
-python3 --version
-```
+- **Python 3.12+** (enforced at runtime)
+- **PyYAML** (declared in requirements.txt)
 
 ## Architecture Overview
 
-### Module Organization
-The codebase follows a modular architecture with clear separation of concerns:
+### Design Patterns
 
-- **Main Entry Point**: `dv2-models-list.py` - CLI interface, argument parsing, and orchestration
-- **Filters Package**: `filters/` - Filter implementations with abstract base class pattern
-  - `base.py`: Abstract Filter class and FilterOperator enum
-  - `string_filters.py`: String comparison operations (equals, contains, regex, etc.)
-  - `numeric_filters.py`: Numeric comparisons (>, <, between, etc.)
-  - `chain.py`: FilterChain for combining multiple filters with AND/OR logic
-- **Formatters Package**: `formatters/` - Output formatting with pluggable formatters
-  - `base.py`: Abstract ModelFormatter class
-  - `table.py`, `json_format.py`, `csv_format.py`, `yaml_format.py`, `tree.py`: Specific format implementations
-- **Core Modules**:
-  - `query_parser.py`: Parses filter expressions ("field:operator:value")
-  - `model_stats.py`: Statistical analysis functionality
-  - `presets.py`: Predefined filter combinations
-
-### Key Design Patterns
-
-1. **Abstract Factory Pattern**: Formatters and filters use abstract base classes for extensibility
-2. **Chain of Responsibility**: FilterChain combines multiple filters
-3. **Strategy Pattern**: Different formatters selected at runtime based on user input
+| Pattern | Implementation | Purpose |
+|---------|---------------|---------|
+| Abstract Factory | `Filter`, `ModelFormatter` base classes | Extensible filter/formatter system |
+| Chain of Responsibility | `FilterChain` | Combine multiple filters with AND/OR logic |
+| Strategy | `get_formatter()` | Runtime formatter selection |
 
 ### Data Flow
-1. Command line args → ArgumentParser
-2. Load Models.json → Dict[str, Any]
-3. Parse filter expressions → Filter objects
-4. Apply FilterChain → Filtered models
-5. Sort/limit if requested
-6. Format output → Selected formatter
-7. Print results
 
-### Filter System Architecture
-- Filters are created based on operator type and field name
-- Numeric fields are auto-detected (hardcoded list in `chain.py:70-74`)
-- String operators fallback for failed numeric parsing
-- FilterChain handles AND/OR logic and negation
+```
+CLI args → ArgumentParser → load_models() → FilterChain.matches() → sort_models() → Formatter.format() → stdout
+```
 
-## Critical Issues from Audit
+### Module Responsibilities
 
-### Security Vulnerabilities
-1. **Regex DoS Risk**: User-supplied regex patterns in `filters/string_filters.py:54-56` are compiled without validation
-2. **Path Traversal**: Models file path in `dv2-models-list.py:144-149` accepts arbitrary paths
-3. **No Input Validation**: Filter expressions and field paths lack comprehensive validation
+- **`dv2-models-list.py`**: CLI entry point, orchestration, `ModelLoadError` exception
+- **`filters/`**: Filter implementations
+  - `base.py`: `Filter` ABC, `FilterOperator` enum
+  - `string_filters.py`: String ops + regex validation (`RegexValidationError`)
+  - `numeric_filters.py`: Numeric comparisons
+  - `chain.py`: `FilterChain` for combining filters
+- **`formatters/`**: Output formatters (table, json, csv, yaml, tree)
+- **`query_parser.py`**: Parses `field:operator:value` expressions, validates field paths
+- **`model_stats.py`**: Statistics calculations
+- **`presets.py`**: Predefined filter combinations
 
-### Reliability Issues
-1. **Hard Exit on Error**: `load_models()` calls `sys.exit(1)` on JSON errors - no graceful degradation
-2. **Silent Failures**: Numeric conversion errors in filters fail silently without user feedback
-3. **No Error Recovery**: Missing error handling throughout the codebase
+## Filter Expression Format
 
-### Technical Debt
-1. **No Tests**: Complete absence of unit, integration, or functional tests
-2. **Hardcoded Values**: Numeric field names hardcoded in `filters/chain.py:70-74`
-3. **No Logging**: No logging infrastructure for debugging
-4. **Missing Type Hints**: Incomplete type annotations in several modules
+```
+field:operator:value    # Standard format
+field=value             # Shorthand for equals
+token_costs.input:>=:0  # Nested field paths supported
+```
 
-## Development Notes
+Field paths are validated against: `^[a-zA-Z_][a-zA-Z0-9_]*(\.[a-zA-Z_][a-zA-Z0-9_]*)*$`
 
-### Adding New Filters
-1. Create new filter class inheriting from `Filter` in appropriate module
-2. Implement `matches()` method
-3. Add operator mapping in `FilterChain._create_filter()`
-4. Update `query_parser.normalize_operator()` for any aliases
+## Adding New Components
 
-### Adding New Formatters
-1. Create new formatter class inheriting from `ModelFormatter`
-2. Implement `format()` method
-3. Add to formatter dictionary in `get_formatter()`
+### New Filter Operator
 
-### Models.json Location
-The script looks for Models.json in its own directory by default. Can be overridden with `-m` flag.
+1. Add enum value to `FilterOperator` in `filters/base.py`
+2. Add operator mapping in `FilterChain._create_filter()` in `filters/chain.py`
+3. Implement match logic in `StringFilter.matches()` or `NumericFilter.matches()`
+4. Add alias in `query_parser.normalize_operator()` if needed
 
-### Filter Expression Format
-Standard format: `field:operator:value`
-- Fields can be nested: `token_costs.input:equals:0`
-- Values containing colons must be last (split on first 2 colons only)
-- Alternative format for equals: `field=value`
+### New Output Formatter
 
-### Known Limitations
-- Regex patterns have no timeout protection (DoS vulnerability)
+1. Create class inheriting from `ModelFormatter` in `formatters/`
+2. Implement `format(models, **kwargs) -> str` method
+3. Add to `formatters/__init__.py` exports
+4. Add to `get_formatter()` dictionary in `dv2-models-list.py`
+
+## Security Notes
+
+- **Regex patterns**: Validated for dangerous constructs (nested quantifiers) and length-limited to 500 chars
+- **Field paths**: Validated before use in filter expressions
+- **File loading**: Uses custom `ModelLoadError` exception with specific error types
+
+## Known Limitations
+
+- Numeric fields are hardcoded in `filters/chain.py:69` (`available`, `enabled`, `context_window`, etc.)
+- No test suite exists
 - No caching for repeated queries
-- Synchronous I/O for large JSON files
-- Dict → List → Dict conversion in sorting is inefficient
 
 #fin

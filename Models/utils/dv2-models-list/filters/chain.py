@@ -17,7 +17,7 @@ class FilterChain:
     self.use_or = use_or
     self.negate = negate
 
-  def add_filter(self, field: str, operator: str, value: Any, case_sensitive: bool = False):
+  def add_filter(self, field: str, operator: str, value: Any, case_sensitive: bool = False) -> None:
     """Add a filter to the chain."""
     # Determine filter type based on operator or field type
     filter_obj = self._create_filter(field, operator, value, case_sensitive)
@@ -93,7 +93,7 @@ class FilterChain:
     # Apply negation if requested
     return not result if self.negate else result
 
-  def clear(self):
+  def clear(self) -> None:
     """Clear all filters."""
     self.filters.clear()
 

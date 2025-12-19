@@ -12,7 +12,7 @@ class ModelStatistics:
   def __init__(self, models: dict[str, Any]):
     self.models = models
 
-  def print_summary(self):
+  def print_summary(self) -> None:
     """Print overall statistics summary."""
     if not self.models:
       print("No models to analyze.")
@@ -66,7 +66,7 @@ class ModelStatistics:
       print(f"  Max: {max(context_windows):,} tokens")
       print(f"  Average: {sum(context_windows) / len(context_windows):,.0f} tokens")
 
-  def print_count_by(self, field: str):
+  def print_count_by(self, field: str) -> None:
     """Print counts grouped by specified field."""
     if not self.models:
       print("No models to analyze.")
@@ -91,7 +91,7 @@ class ModelStatistics:
     print(f"{'=' * 40}")
     print(f"Total: {len(self.models)} models in {len(counts)} groups")
 
-  def print_unique_values(self, field: str):
+  def print_unique_values(self, field: str) -> None:
     """Print unique values for a field."""
     if not self.models:
       print("No models to analyze.")

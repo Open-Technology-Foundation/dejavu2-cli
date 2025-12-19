@@ -27,7 +27,10 @@ def parse_filter_expression(expr: str) -> tuple[str, str, str]:
     if "=" in expr:
       # Handle field=value as equals operator
       field, value = expr.split("=", 1)
-      return field.strip(), "equals", value.strip()
+      field = field.strip()
+      if not validate_field_path(field):
+        raise ValueError(f"Invalid field path '{field}' in expression: '{expr}'")
+      return field, "equals", value.strip()
     else:
       raise ValueError(f"Invalid filter expression: '{expr}'. Expected format: 'field:operator:value' or 'field=value'")
 
@@ -41,6 +44,9 @@ def parse_filter_expression(expr: str) -> tuple[str, str, str]:
   # Validate field name
   if not field:
     raise ValueError(f"Empty field name in filter expression: '{expr}'")
+
+  if not validate_field_path(field):
+    raise ValueError(f"Invalid field path '{field}' in expression: '{expr}'")
 
   # Normalize operator aliases
   operator = normalize_operator(operator)

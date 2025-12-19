@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+import sys
+if sys.version_info < (3, 12):
+  print("Error: Python 3.12+ required", file=sys.stderr)
+  sys.exit(1)
 """
 Enhanced model listing tool with advanced filtering and formatting capabilities.
 
@@ -50,12 +54,18 @@ Common Fields:
 import argparse
 import json
 import pathlib
-import sys
 from typing import Any
 
 # Import our modules
 from filters import FilterChain
-from formatters import CSVFormatter, JSONFormatter, TableFormatter, TreeFormatter, YAMLFormatter
+
+
+class ModelLoadError(Exception):
+  """Raised when models file cannot be loaded."""
+  pass
+
+
+from formatters import CSVFormatter, JSONFormatter, ModelFormatter, TableFormatter, TreeFormatter, YAMLFormatter
 from model_stats import ModelStatistics
 from presets import FILTER_PRESETS
 from query_parser import parse_filter_expression
@@ -64,7 +74,7 @@ from query_parser import parse_filter_expression
 script_dir = pathlib.Path(__file__).resolve().parent
 
 
-def create_parser():
+def create_parser() -> argparse.ArgumentParser:
   """Create argument parser with all options."""
   parser = argparse.ArgumentParser(prog="dv2-models-list", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
 
@@ -116,16 +126,34 @@ def create_parser():
 
 
 def load_models(json_path: pathlib.Path) -> dict[str, Any]:
-  """Load models from JSON file."""
+  """
+  Load models from JSON file.
+
+  Args:
+    json_path: Path to the Models.json file
+
+  Returns:
+    Dictionary of model name to model data
+
+  Raises:
+    ModelLoadError: If the file cannot be loaded or parsed
+  """
   try:
     with open(json_path, encoding="utf-8") as f:
       return json.load(f)
-  except Exception as e:
-    print(f"Error loading models file: {e}", file=sys.stderr)
-    sys.exit(1)
+  except FileNotFoundError:
+    raise ModelLoadError(f"Models file not found: {json_path}") from None
+  except PermissionError:
+    raise ModelLoadError(f"Permission denied reading: {json_path}") from None
+  except json.JSONDecodeError as e:
+    raise ModelLoadError(f"Invalid JSON in {json_path}: {e.msg} at line {e.lineno}") from e
+  except IsADirectoryError:
+    raise ModelLoadError(f"Path is a directory, not a file: {json_path}") from None
+  except OSError as e:
+    raise ModelLoadError(f"Cannot read {json_path}: {e.strerror}") from e
 
 
-def apply_legacy_filters(args) -> list[tuple[str, str, str]]:
+def apply_legacy_filters(args: argparse.Namespace) -> list[tuple[str, str, str]]:
   """Convert legacy filter arguments to new filter format."""
   filters = []
 
@@ -145,13 +173,22 @@ def apply_legacy_filters(args) -> list[tuple[str, str, str]]:
   return filters
 
 
-def main():
-  """Main entry point."""
+def main() -> int:
+  """
+  Main entry point.
+
+  Returns:
+    Exit code (0 for success, 1 for error)
+  """
   parser = create_parser()
   args = parser.parse_args()
 
   # Load models
-  models = load_models(args.models_file)
+  try:
+    models = load_models(args.models_file)
+  except ModelLoadError as e:
+    print(f"Error: {e}", file=sys.stderr)
+    return 1
 
   # Build filter chain
   filter_chain = FilterChain(use_or=args.use_or, negate=args.negate)
@@ -190,17 +227,17 @@ def main():
   if args.stats:
     stats = ModelStatistics(filtered_models)
     stats.print_summary()
-    return
+    return 0
 
   if args.count_by:
     stats = ModelStatistics(filtered_models)
     stats.print_count_by(args.count_by)
-    return
+    return 0
 
   if args.unique:
     stats = ModelStatistics(filtered_models)
     stats.print_unique_values(args.unique)
-    return
+    return 0
 
   # Sort models if requested
   if args.sort:
@@ -219,12 +256,13 @@ def main():
   output = formatter.format(filtered_models, columns=columns, show_header=not args.no_header, group_by=args.group)
 
   print(output)
+  return 0
 
 
 def sort_models(models: dict[str, Any], sort_fields: list[str], reverse: bool = False) -> dict[str, Any]:
   """Sort models by specified fields."""
 
-  def sort_key(item):
+  def sort_key(item: tuple[str, dict[str, Any]]) -> list[Any]:
     name, data = item
     keys = []
     for field in sort_fields:
@@ -242,7 +280,7 @@ def sort_models(models: dict[str, Any], sort_fields: list[str], reverse: bool = 
   return dict(sorted_items)
 
 
-def get_formatter(format_name: str):
+def get_formatter(format_name: str) -> ModelFormatter:
   """Get the appropriate formatter based on format name."""
   formatters = {
     "default": TableFormatter(mode="simple"),
@@ -256,5 +294,5 @@ def get_formatter(format_name: str):
 
 
 if __name__ == "__main__":
-  main()
+  sys.exit(main())
 # fin
