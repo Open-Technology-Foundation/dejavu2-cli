@@ -57,6 +57,13 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 4. Reference valid model from parent Models.json
 5. Set temperature based on use case (lower for factual, higher for creative)
 6. Set `available: 1` and `enabled: 0` for initial testing
+7. **Insert in alphabetical order** (Dejavu2 always first, then A-Z)
+
+### Agent Ordering
+Agents in `Agents.json` must be alphabetically sorted:
+- **Dejavu2** is always the first entry (default agent)
+- All other agents follow in case-insensitive alphabetical order
+- Insert new agents at correct position, not at end of file
 
 ### System Prompt Variables
 - `{{spacetime}}`: Current date/time placeholder

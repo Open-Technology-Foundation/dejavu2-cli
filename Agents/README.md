@@ -210,6 +210,27 @@ When adding agents directly to `Agents.json`:
 5. Set appropriate values for all required parameters
 6. Add optional parameters as needed for specific functionality
 7. Set `available: 1` and `enabled: 0` initially for testing
+8. **Insert the agent in alphabetical order** (see Agent Ordering below)
+
+### Agent Ordering
+
+Agents in `Agents.json` must be maintained in **alphabetical order** with one exception:
+
+- **Dejavu2** must always be the first entry (it is the default agent)
+- All other agents follow in case-insensitive alphabetical order
+
+Example ordering:
+```
+1. Dejavu2 - Helpful AI       (always first)
+2. askOkusi - Okusi Associates Advisor
+3. Bio - Personal Biographer
+4. CharlesDodgson - Childrens Author
+...
+27. X_Post - Create a post suitable for X
+28. Zanny - Top_Journalist_Copy_Editor
+```
+
+When adding a new agent, insert it at the correct alphabetical position rather than appending to the end of the file.
 
 ## Agent Naming Convention
 
