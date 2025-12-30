@@ -4,7 +4,7 @@ CSV formatter for models output.
 
 import csv
 import io
-from typing import Any
+from typing import Any, override
 
 from .base import ModelFormatter
 
@@ -12,6 +12,7 @@ from .base import ModelFormatter
 class CSVFormatter(ModelFormatter):
   """Format models as CSV."""
 
+  @override
   def format(self, models: dict[str, Any], columns: list[str] | None = None, show_header: bool = True, **kwargs) -> str:
     """Format models as CSV."""
     if not models:

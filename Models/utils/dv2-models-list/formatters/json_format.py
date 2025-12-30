@@ -3,7 +3,7 @@ JSON formatter for models output.
 """
 
 import json
-from typing import Any
+from typing import Any, override
 
 from .base import ModelFormatter
 
@@ -11,6 +11,7 @@ from .base import ModelFormatter
 class JSONFormatter(ModelFormatter):
   """Format models as JSON."""
 
+  @override
   def format(self, models: dict[str, Any], columns: list[str] | None = None, indent: int = 2, **kwargs) -> str:
     """Format models as JSON."""
     if columns:

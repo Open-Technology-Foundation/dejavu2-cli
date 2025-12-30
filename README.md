@@ -22,7 +22,7 @@ A powerful command-line interface for interacting with various Large Language Mo
 
 `dejavu2-cli` (also available as `dv2`) is a versatile command-line tool for executing queries to multiple language models from various providers. It provides a unified interface for AI interactions with support for conversation history, contextual inputs, customizable parameters, and agent templates.
 
-**Current Version**: 0.8.42
+**Current Version**: 0.9.1
 
 ## Features
 
@@ -30,12 +30,12 @@ A powerful command-line interface for interacting with various Large Language Mo
 - **Multi-Provider Support**: OpenAI (GPT-4/5, O1/O3/O4), Anthropic (Claude 3.5/4), Google (Gemini 2.0/2.5), Ollama
 - **Unified Interface**: Single CLI for all LLM providers with consistent parameter handling
 - **Conversation Management**: Persistent history with file locking for concurrent access safety
-- **Agent Templates**: Pre-configured AI personas with specialized capabilities
+- **Agent Templates**: 28 pre-configured AI personas with specialized capabilities
 - **Context Enhancement**: Include reference files and knowledgebases in queries
 - **Security-First Design**: Input validation, secure subprocess execution, SDK-specific exception handling
 
 ### Advanced Features
-- **Model Registry**: 60+ models with aliases and metadata across all providers
+- **Model Registry**: 69 models (39 enabled) with aliases and metadata across all providers
 - **Smart Parameter Handling**: Automatic adjustment for model-specific requirements (O-series reasoning, Gemini configs)
 - **Multiple Output Formats**: Export conversations to markdown, view in various formats
 - **Robust Error Handling**: SDK-specific exceptions with graceful degradation
@@ -67,13 +67,13 @@ A powerful command-line interface for interacting with various Large Language Mo
    ```bash
    # For Anthropic models (Claude)
    export ANTHROPIC_API_KEY="your_anthropic_api_key"
-   
+
    # For OpenAI models (GPT, O1, O3)
    export OPENAI_API_KEY="your_openai_api_key"
-   
+
    # For Google models (Gemini)
    export GOOGLE_API_KEY="your_google_api_key"
-   
+
    # Ollama models work without API key (local server)
    ```
 
@@ -112,15 +112,15 @@ Core Modules:
 ├── main.py              # CLI entry point and orchestration
 ├── llm_clients.py       # LLM provider API integrations
 ├── conversations.py     # Conversation history management
-├── models.py           # Model registry and selection
-├── templates.py        # Agent template management
-├── context.py          # Reference files and knowledgebases
-├── config.py           # Configuration loading and management
-├── security.py         # Input validation and secure execution
-├── errors.py           # Custom exception hierarchy
-├── display.py          # Output formatting and status display
-├── utils.py            # Utility functions
-└── version.py          # Version information
+├── models.py            # Model registry and selection
+├── templates.py         # Agent template management
+├── context.py           # Reference files and knowledgebases
+├── config.py            # Configuration loading and management
+├── security.py          # Input validation and secure execution
+├── errors.py            # Custom exception hierarchy
+├── display.py           # Output formatting and status display
+├── utils.py             # Utility functions
+└── version.py           # Version information
 ```
 
 ### Key Components
@@ -158,8 +158,9 @@ dv2 [QUERY] [OPTIONS]
 
 | Option | Description |
 |--------|-------------|
+| `-V, --version` | Show version and exit |
 | `-m, --model MODEL` | Select model by name or alias (e.g., `gpt4o`, `sonnet`) |
-| `-T, --template NAME` | Use an agent template (e.g., `"Coder - Software Expert"`) |
+| `-T, --template NAME` | Use an agent template (e.g., `leet`, `dejavu2`) |
 | `-t, --temperature FLOAT` | Set creativity level (0.0-1.0) |
 | `-M, --max-tokens INT` | Maximum response length |
 | `-s, --systemprompt TEXT` | Custom system instructions |
@@ -171,11 +172,16 @@ dv2 [QUERY] [OPTIONS]
 | `-c, --continue` | Continue the most recent conversation |
 | `-C, --conversation ID` | Continue a specific conversation |
 | `-n, --new-conversation` | Force start a new conversation |
+| `-i, --title TEXT` | Set a title for a new conversation |
 | `-x, --list-conversations` | List all saved conversations |
-| `-e, --export-conversation ID` | Export conversation to markdown |
+| `-X, --delete-conversation ID` | Delete a specific conversation |
+| `-e, --export-conversation ID` | Export conversation to markdown (ID or "current") |
+| `-f, --export-path PATH` | Path to save exported markdown file |
+| `-O, --stdout` | Output exported conversation to stdout |
 | `-W, --list-messages ID` | Show all messages in a conversation |
 | `--remove-message ID INDEX` | Remove a specific message |
 | `--remove-pair ID INDEX` | Remove a user-assistant message pair |
+| `-g, --message ROLE TEXT` | Add message pairs (e.g., `-g user "hello"`) |
 
 ### Context and References
 
@@ -190,11 +196,25 @@ dv2 [QUERY] [OPTIONS]
 | Option | Description |
 |--------|-------------|
 | `-S, --status` | Display current configuration |
+| `-P, --print-systemprompt` | Print full system prompt with --status |
 | `-a, --list-models` | List available models |
-| `-l, --list-template NAME` | Show template details |
+| `-A, --list-models-details` | List models with all details |
+| `-l, --list-template NAME` | Show template details ("all" for all) |
+| `-L, --list-template-names` | List template names without systemprompts |
 | `-K, --list-knowledge-bases` | List available knowledgebases |
 | `-E, --edit-templates` | Edit Agents.json |
 | `-D, --edit-defaults` | Edit defaults.yaml |
+| `-d, --edit-models` | Edit Models.json |
+
+### Output and Logging
+
+| Option | Description |
+|--------|-------------|
+| `-p, --project-name NAME` | Project name for recording conversations |
+| `-o, --output-dir DIR` | Directory to output results |
+| `-v, --verbose` | Enable verbose (debug level) logging |
+| `--log-file PATH` | Path to log file |
+| `-q, --quiet` | Suppress log messages except errors |
 
 ## Models Module
 
@@ -258,13 +278,13 @@ Claude-powered intelligent updates:
 
 ### Model Selection
 Models can be selected by:
-1. **Full model ID**: `claude-3-7-sonnet-latest`
+1. **Full model ID**: `claude-sonnet-4-5-20250514`
 2. **Alias**: `sonnet`
 3. **Partial match**: `gpt4` (matches `gpt-4o`)
 
 ## Agents Module
 
-The Agents module provides pre-configured AI personas with specialized capabilities.
+The Agents module provides 28 pre-configured AI personas with specialized capabilities.
 
 ### Agent Registry (`Agents.json`)
 
@@ -304,7 +324,7 @@ Each agent defines:
 
 # Create new agent
 ./Agents/dv2-agents insert "NewAgent - Description" \
-  --model claude-3-7-sonnet-latest --temperature 0.7
+  --model claude-sonnet-4-5-20250514 --temperature 0.7
 
 # Edit existing agent
 ./Agents/dv2-agents edit "Leet"
@@ -318,13 +338,13 @@ Agents are selected via the `-T` option:
 dv2 "Review this Python function for security issues" -T leet -r code.py
 
 # Use the Legal specialist
-dv2 "Explain this contract clause" -T "Legal - Law and Regulations"
+dv2 "Explain this contract clause" -T legal
 
 # Use the Editor for improving text
-dv2 "Improve this paragraph" -T Editor
+dv2 "Improve this paragraph" -T editor
 ```
 
-**Note:** when specifying an agent with the -T|--template option, only the Agent key is required. It is non-case sensitive. To get a list of Agent template keys:  `jq -r 'keys[]' Agents.json | cut -d' ' -f1`
+**Note**: When specifying an agent with `-T|--template`, only the agent key is required (case-insensitive). To list agent keys: `jq -r 'keys[]' Agents.json | cut -d' ' -f1`
 
 ## Configuration
 
@@ -337,7 +357,7 @@ dv2 "Improve this paragraph" -T Editor
      model: sonnet
      temperature: 0.1
      max_tokens: 4000
-   
+
    security:
      subprocess:
        timeout: 30.0
@@ -349,11 +369,11 @@ dv2 "Improve this paragraph" -T Editor
    - User-specific settings
 
 3. **Models.json** - Model registry
-   - Comprehensive model database
+   - 69 model definitions
    - Provider configurations
 
 4. **Agents.json** - Agent templates
-   - Pre-configured AI personas
+   - 28 pre-configured AI personas
    - Specialized system prompts
 
 ### Configuration Hierarchy
@@ -382,7 +402,7 @@ dv2 "Explain TCP/IP networking" -m opus -t 0.1
 dv2 "Review this code for bugs" -r main.py,utils.py
 
 # Summarize documents
-dv2 "Summarize these reports" -r report1.pdf,report2.docx -T Summary
+dv2 "Summarize these reports" -r report1.pdf,report2.docx -T summary
 
 # Compare files
 dv2 "What are the differences between these configs?" -r old.yaml,new.yaml
@@ -406,7 +426,7 @@ dv2 -W 550e8400-e29b-41d4-a716-446655440000
 
 ### Using Agent Templates
 ```bash
-# Note: when specifying an agent with the -T|--template option, only the 
+# Note: when specifying an agent with the -T|--template option, only the
 # Agent key is required. It is non-case sensitive.
 # To get a list of Agent template keys:  jq -r 'keys[]' Agents.json | cut -d' ' -f1
 
@@ -430,12 +450,12 @@ dv2 "Write a children's story" -T charlesdodgson
 dv2 "Create a Twitter post" -T x_post
 
 # Other useful agents
-dv2 "Get factual answers" -T Virgo
+dv2 "Get factual answers" -T virgo
 dv2 "Translate this text" -T trans -r document.txt
-dv2 "Ask with humor" -T Sarki
+dv2 "Ask with humor" -T sarki
 
 # Combine agents with specific parameters
-dv2 "Debug this Python code" -T Leet -m opus -t 0.2 -r buggy_code.py
+dv2 "Debug this Python code" -T leet -m opus -t 0.2 -r buggy_code.py
 ```
 
 ### Knowledgebase Integration
@@ -467,10 +487,10 @@ dv2 "Is this compliant with our policies?" -k "company_policies" -r proposal.pdf
 dv2 "Analyze this data" -r data.csv | dv2 "Create a summary report" -c
 
 # Complex multi-context query
-dv2 "Review architecture" -T DevOps -k "best_practices" -r architecture.md -m opus
+dv2 "Review architecture" -T devops -k "best_practices" -r architecture.md -m opus
 
 # Export formatted conversation
-dv2 "Let's design a system" -T Architect -c | dv2 -e current -O > design_discussion.md
+dv2 "Let's design a system" -T architect -c | dv2 -e current -O > design_discussion.md
 ```
 
 ## Development
@@ -482,24 +502,33 @@ dejavu2-cli/
 │   ├── main.py              # CLI orchestration
 │   ├── llm_clients.py       # Provider integrations
 │   ├── conversations.py     # History management
-│   ├── models.py           # Model selection
-│   ├── templates.py        # Agent management
-│   ├── context.py          # Reference handling
-│   ├── config.py           # Configuration
-│   ├── security.py         # Security layer
-│   ├── errors.py           # Exception hierarchy
-│   └── display.py          # Output formatting
+│   ├── models.py            # Model selection
+│   ├── templates.py         # Agent management
+│   ├── context.py           # Reference handling
+│   ├── config.py            # Configuration
+│   ├── security.py          # Security layer
+│   ├── errors.py            # Exception hierarchy
+│   ├── display.py           # Output formatting
+│   ├── utils.py             # Utility functions
+│   └── version.py           # Version information
 ├── Configuration
-│   ├── defaults.yaml       # System defaults
-│   ├── Models.json        # Model registry
-│   └── Agents.json        # Agent templates
+│   ├── defaults.yaml        # System defaults
+│   ├── Models.json          # Model registry (symlink)
+│   └── Agents.json          # Agent templates (symlink)
 ├── Submodules
-│   ├── Models/            # Model management tools
-│   └── Agents/            # Agent management tools
+│   ├── Models/              # Model management tools
+│   │   ├── Models.json      # Model registry
+│   │   ├── dv2-models-list  # Model listing tool
+│   │   └── dv2-models-update # Model update tool
+│   └── Agents/              # Agent management tools
+│       ├── Agents.json      # Agent templates
+│       └── dv2-agents       # Agent management tool
+├── Utils
+│   └── bash_completions/    # Shell completion scripts
 └── Tests
-    ├── unit/              # Unit tests
-    ├── integration/       # Integration tests
-    └── functional/        # End-to-end tests
+    ├── unit/                # Unit tests
+    ├── integration/         # Integration tests
+    └── functional/          # End-to-end tests
 ```
 
 ### Coding Standards
@@ -511,7 +540,7 @@ dejavu2-cli/
 
 ### Testing
 
-The test suite includes 322 tests across unit, integration, and functional categories.
+The test suite includes 325 tests across unit, integration, and functional categories.
 
 ```bash
 # Run all tests
@@ -625,6 +654,6 @@ Contributions are welcome! Please:
 
 ---
 
-**Current Version**: 0.8.42 | **Status**: Active Development | **Python**: 3.12+
+**Current Version**: 0.9.1 | **Status**: Active Development | **Python**: 3.12+
 
 #fin

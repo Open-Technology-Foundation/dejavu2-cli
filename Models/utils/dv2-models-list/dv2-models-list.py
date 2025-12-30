@@ -51,13 +51,13 @@ Common Fields:
   vision, context_window, max_output_tokens
 """
 
-import argparse
-import json
-import pathlib
-from typing import Any
+import argparse  # noqa: E402
+import json  # noqa: E402
+import pathlib  # noqa: E402
+from typing import Any  # noqa: E402
 
 # Import our modules
-from filters import FilterChain
+from filters import FilterChain  # noqa: E402
 
 
 class ModelLoadError(Exception):
@@ -65,10 +65,10 @@ class ModelLoadError(Exception):
   pass
 
 
-from formatters import CSVFormatter, JSONFormatter, ModelFormatter, TableFormatter, TreeFormatter, YAMLFormatter
-from model_stats import ModelStatistics
-from presets import FILTER_PRESETS
-from query_parser import parse_filter_expression
+from formatters import CSVFormatter, JSONFormatter, ModelFormatter, TableFormatter, TreeFormatter, YAMLFormatter  # noqa: E402
+from model_stats import ModelStatistics  # noqa: E402
+from presets import FILTER_PRESETS  # noqa: E402
+from query_parser import parse_filter_expression  # noqa: E402
 
 # Get script directory
 script_dir = pathlib.Path(__file__).resolve().parent

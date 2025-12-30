@@ -1,1 +1,9 @@
-dv2-agents.py
+#!/bin/bash
+#shellcheck disable=SC1091,SC2155
+set -euo pipefail
+declare -r SCRIPT_PATH=$(realpath -e -- "$0")
+declare -r SCRIPT_DIR=${SCRIPT_PATH%/*}
+source "$SCRIPT_DIR"/../.venv/bin/activate
+"$SCRIPT_DIR"/../.venv/bin/python3 "$SCRIPT_DIR"/dv2-agents.py "$@"
+#fin
+

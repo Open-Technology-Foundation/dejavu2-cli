@@ -2,7 +2,7 @@
 YAML formatter for models output.
 """
 
-from typing import Any
+from typing import Any, override
 
 import yaml
 
@@ -12,6 +12,7 @@ from .base import ModelFormatter
 class YAMLFormatter(ModelFormatter):
   """Format models as YAML."""
 
+  @override
   def format(self, models: dict[str, Any], columns: list[str] | None = None, **kwargs) -> str:
     """Format models as YAML."""
     if columns:

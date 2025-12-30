@@ -2,7 +2,7 @@
 Table formatter for displaying models in tabular format.
 """
 
-from typing import Any
+from typing import Any, override
 
 from .base import ModelFormatter
 
@@ -13,6 +13,7 @@ class TableFormatter(ModelFormatter):
   def __init__(self, mode: str = "full"):
     self.mode = mode  # 'simple' or 'full'
 
+  @override
   def format(self, models: dict[str, Any], columns: list[str] | None = None, show_header: bool = True, **kwargs) -> str:
     """Format models as a table."""
     if not models:

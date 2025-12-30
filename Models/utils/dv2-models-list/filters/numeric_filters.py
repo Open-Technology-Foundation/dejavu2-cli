@@ -2,7 +2,7 @@
 Numeric filter implementations.
 """
 
-from typing import Any
+from typing import Any, override
 
 from .base import Filter, FilterOperator
 
@@ -52,6 +52,7 @@ class NumericFilter(Filter):
     except (ValueError, TypeError) as e:
       raise ValueError(f"Cannot convert to number: {value}") from e
 
+  @override
   def matches(self, model_data: dict[str, Any]) -> bool:
     """Check if the model data matches this numeric filter."""
     field_value = self.get_field_value(model_data)

@@ -3,7 +3,7 @@ Tree/hierarchy formatter for displaying models grouped by field.
 """
 
 from collections import defaultdict
-from typing import Any
+from typing import Any, override
 
 from .base import ModelFormatter
 
@@ -11,6 +11,7 @@ from .base import ModelFormatter
 class TreeFormatter(ModelFormatter):
   """Format models as a tree structure grouped by field."""
 
+  @override
   def format(self, models: dict[str, Any], group_by: str | None = None, show_count: bool = True, **kwargs) -> str:
     """Format models as a tree grouped by specified field."""
     if not models:

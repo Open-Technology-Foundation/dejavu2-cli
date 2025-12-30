@@ -4,7 +4,7 @@ String-based filter implementations.
 
 import re
 from functools import lru_cache
-from typing import Any
+from typing import Any, override
 
 from .base import Filter, FilterOperator
 
@@ -82,6 +82,7 @@ class StringFilter(Filter):
       flags = 0 if case_sensitive else re.IGNORECASE
       self._compiled_regex = _compile_regex(str(value), flags)
 
+  @override
   def matches(self, model_data: dict[str, Any]) -> bool:
     """Check if the model data matches this string filter."""
     field_value = self.get_field_value(model_data)
