@@ -45,6 +45,9 @@ Sorting and limiting:
   -r, --sort-reverse    Reverse sort order
   -l, --limit N         Limit results to N entries
 
+Editing:
+  -E, --edit MODEL      Edit model in \$EDITOR (by name or alias)
+
 Utility commands:
   --stats               Show summary statistics
   --count FIELD         Count models by field
@@ -220,14 +223,65 @@ list_fields() {
   jq -r 'to_entries | .[0].value | keys[]' "$MODELS_JSON" | sort
 }
 
+edit_model() {
+  local -- model=$1
+  local -- canonical tmp_file editor
+
+  # Resolve model name/alias to canonical key
+  canonical=$(jq -r --arg m "$model" '
+    to_entries[] | select(.key == $m or (.value.alias // "") == $m) | .key
+  ' "$MODELS_JSON" | head -1)
+  [[ -n $canonical ]] || die 1 "Model not found: $model"
+
+  # Extract to temp file (pretty JSON)
+  tmp_file="/tmp/dv2-edit-${canonical}.json"
+  jq --arg m "$canonical" '.[$m]' "$MODELS_JSON" > "$tmp_file"
+
+  # Open in editor
+  editor=${EDITOR:-vi}
+  "$editor" "$tmp_file"
+
+  # Validate edited JSON
+  if ! jq empty "$tmp_file" 2>/dev/null; then
+    rm -f "$tmp_file"
+    die 1 "Invalid JSON syntax"
+  fi
+
+  # Check if actually changed
+  local -- original edited
+  original=$(jq -S --arg m "$canonical" '.[$m]' "$MODELS_JSON")
+  edited=$(jq -S . "$tmp_file")
+  if [[ $original == "$edited" ]]; then
+    rm -f "$tmp_file"
+    printf 'No changes made.\n'
+    return 0
+  fi
+
+  # Create backup
+  cp "$MODELS_JSON" "${MODELS_JSON%.json}.$(date +%Y%m%d-%H%M%S).backup.json"
+
+  # Update info_updated and merge back
+  jq --arg m "$canonical" --arg d "$(date +%Y-%m-%d)" \
+     --slurpfile new "$tmp_file" \
+     '.[$m] = ($new[0] | .info_updated = $d)' \
+     "$MODELS_JSON" > "${MODELS_JSON}.tmp" && \
+     mv "${MODELS_JSON}.tmp" "$MODELS_JSON"
+
+  rm -f "$tmp_file"
+  printf 'Updated: %s\n' "$canonical"
+}
+
 main() {
   local -- cmd=''
   local -- cmd_arg=''
+  local -- EDIT_MODEL=''
 
   # Parse arguments
   while (($#)); do
     case $1 in
       -A|--all) ALL_MODELS=1 ;;
+      -E|--edit)
+                cmd=edit; EDIT_MODEL=$2; shift ;;
       -p|--parent)
                 FILTER_PARENT=$2; shift ;;
       -c|--category)
@@ -260,7 +314,7 @@ main() {
                 show_help; return 0 ;;
       -V|--version)
                 printf '%s %s\n' "$SCRIPT_NAME" "$VERSION"; return 0 ;;
-      -[ApcfamveoCsrlhV]?*)
+      -[AEpcfamveoCsrlhV]?*)
                 set -- "${1:0:2}" "-${1:2}" "${@:2}"; continue ;;
       *) die 22 "Unknown option ${1@Q}" ;;
     esac
@@ -275,6 +329,7 @@ main() {
     count)  count_by_field "$cmd_arg"; exit 0 ;;
     unique) unique_values "$cmd_arg"; exit 0 ;;
     fields) list_fields; exit 0 ;;
+    edit)   edit_model "$EDIT_MODEL"; exit 0 ;;
   esac
 
   # Build filter and output
