@@ -7,7 +7,7 @@ shopt -s inherit_errexit
 declare -r VERSION=1.0.0
 declare -r SCRIPT_PATH=$(realpath -- "$0")
 declare -r SCRIPT_DIR=${SCRIPT_PATH%/*} SCRIPT_NAME=${SCRIPT_PATH##*/}
-declare -r MODELS_JSON="$SCRIPT_DIR"/../Models.json
+declare -r MODELS_JSON="$SCRIPT_DIR"/Models.json
 
 # Defaults
 declare -i ALL_MODELS=0 REVERSE=0
@@ -225,17 +225,20 @@ list_fields() {
 
 edit_model() {
   local -- model=$1
-  local -- canonical tmp_file editor
+  local -- canonical tmp_file editor models_file
+
+  # Resolve symlink to canonical file path
+  models_file=$(realpath "$MODELS_JSON")
 
   # Resolve model name/alias to canonical key
   canonical=$(jq -r --arg m "$model" '
     to_entries[] | select(.key == $m or (.value.alias // "") == $m) | .key
-  ' "$MODELS_JSON" | head -1)
+  ' "$models_file" | head -1)
   [[ -n $canonical ]] || die 1 "Model not found: $model"
 
   # Extract to temp file (pretty JSON)
   tmp_file="/tmp/dv2-edit-${canonical}.json"
-  jq --arg m "$canonical" '.[$m]' "$MODELS_JSON" > "$tmp_file"
+  jq --arg m "$canonical" '.[$m]' "$models_file" > "$tmp_file"
 
   # Open in editor
   editor=${EDITOR:-vi}
@@ -249,7 +252,7 @@ edit_model() {
 
   # Check if actually changed
   local -- original edited
-  original=$(jq -S --arg m "$canonical" '.[$m]' "$MODELS_JSON")
+  original=$(jq -S --arg m "$canonical" '.[$m]' "$models_file")
   edited=$(jq -S . "$tmp_file")
   if [[ $original == "$edited" ]]; then
     rm -f "$tmp_file"
@@ -257,15 +260,15 @@ edit_model() {
     return 0
   fi
 
-  # Create backup
-  cp "$MODELS_JSON" "${MODELS_JSON%.json}.$(date +%Y%m%d-%H%M%S).backup.json"
+  # Create backup in same directory as canonical file
+  cp "$models_file" "${models_file%.json}.$(date +%Y%m%d-%H%M%S).backup.json"
 
   # Update info_updated and merge back
   jq --arg m "$canonical" --arg d "$(date +%Y-%m-%d)" \
      --slurpfile new "$tmp_file" \
      '.[$m] = ($new[0] | .info_updated = $d)' \
-     "$MODELS_JSON" > "${MODELS_JSON}.tmp" && \
-     mv "${MODELS_JSON}.tmp" "$MODELS_JSON"
+     "$models_file" > "${models_file}.tmp" && \
+     mv "${models_file}.tmp" "$models_file"
 
   rm -f "$tmp_file"
   printf 'Updated: %s\n' "$canonical"
