@@ -1,0 +1,293 @@
+#!/bin/bash
+#shellcheck disable=SC2155
+# dv2-models - List and filter AI models from Models.json
+set -euo pipefail
+shopt -s inherit_errexit
+
+declare -r VERSION=1.0.0
+declare -r SCRIPT_PATH=$(realpath -- "$0")
+declare -r SCRIPT_DIR=${SCRIPT_PATH%/*} SCRIPT_NAME=${SCRIPT_PATH##*/}
+declare -r MODELS_JSON="$SCRIPT_DIR"/../Models.json
+
+# Defaults
+declare -i ALL_MODELS=0 REVERSE=0
+declare -- OUTPUT=simple SORT_FIELD='' COLS='model,alias,parent,context_window'
+declare -- FILTER_PARENT='' FILTER_CATEGORY='' FILTER_FAMILY='' FILTER_ALIAS='' FILTER_MODEL=''
+declare -i FILTER_AVAILABLE=1 FILTER_ENABLED=1 LIMIT=0
+
+die() { >&2 printf '%s: %s\n' "$SCRIPT_NAME" "${@:2}"; exit "${1:-0}"; }
+
+show_help() {
+  cat <<HELP
+Usage: $SCRIPT_NAME [OPTIONS]
+
+List and filter AI models from Models.json.
+
+Filtering (combinable with AND logic):
+  -A, --all             Include ALL models (disabled/unavailable too)
+  -p, --parent PARENT   Filter by parent/provider (e.g., Anthropic, OpenAI)
+  -c, --category CAT    Filter by model_category (e.g., LLM, embed, image)
+  -f, --family FAMILY   Filter by family (e.g., anthropic, openai)
+  -a, --alias ALIAS     Filter by alias (contains, case-insensitive)
+  -m, --model MODEL     Filter by model name (contains, case-insensitive)
+  -v, --available N     Available level >= N (default: 1)
+  -e, --enabled N       Enabled level >= N (default: 1)
+
+Output formats:
+  -o, --output-to FMT   Output format: simple (default), table, json
+
+Table customization:
+  -C, --columns COLS    Comma-separated column list for table output
+                        (default: model,alias,parent,context_window)
+
+Sorting and limiting:
+  -s, --sort-field FLD  Sort by field (e.g., context_window, parent)
+  -r, --sort-reverse    Reverse sort order
+  -l, --limit N         Limit results to N entries
+
+Utility commands:
+  --stats               Show summary statistics
+  --count FIELD         Count models by field
+  --unique FIELD        Show unique values of field
+  --fields              List available fields
+  -h, --help            Show this help
+  -V, --version         Show version
+
+Examples:
+  $SCRIPT_NAME                              # List enabled models
+  $SCRIPT_NAME -A                           # List all models
+  $SCRIPT_NAME -p anthropic -c LLM          # Anthropic LLMs only
+  $SCRIPT_NAME --parent openai --category embed  # OpenAI embeddings
+  $SCRIPT_NAME -o table -s context_window -r -l 5  # Top 5 by context
+  $SCRIPT_NAME -o json | jq '.[] | .model'  # JSON for scripting
+  $SCRIPT_NAME --count parent               # Count per provider
+  $SCRIPT_NAME --unique model_category      # List all categories
+  $SCRIPT_NAME --fields                     # Show available fields
+HELP
+}
+
+check_deps() {
+  command -v jq &>/dev/null || die 1 'jq is required but not installed'
+  [[ -f $MODELS_JSON ]] || die 1 "Models.json not found at ${MODELS_JSON@Q}"
+}
+
+build_jq_filter() {
+  local -- filter='to_entries[]'
+
+  # Availability/enabled filters (skip if -A)
+  if ((! ALL_MODELS)); then
+    filter+=" | select((.value.available // 0) >= $FILTER_AVAILABLE)"
+    filter+=" | select((.value.enabled // 0) >= $FILTER_ENABLED)"
+  fi
+
+  # Parent filter (case-insensitive)
+  if [[ -n $FILTER_PARENT ]]; then
+    filter+=" | select(.value.parent | ascii_downcase | contains(\"${FILTER_PARENT,,}\"))"
+  fi
+
+  # Category filter (case-insensitive)
+  if [[ -n $FILTER_CATEGORY ]]; then
+    filter+=" | select(.value.model_category | ascii_downcase | contains(\"${FILTER_CATEGORY,,}\"))"
+  fi
+
+  # Family filter (case-insensitive)
+  if [[ -n $FILTER_FAMILY ]]; then
+    filter+=" | select(.value.family // \"\" | ascii_downcase | contains(\"${FILTER_FAMILY,,}\"))"
+  fi
+
+  # Alias filter (case-insensitive, contains)
+  if [[ -n $FILTER_ALIAS ]]; then
+    filter+=" | select(.value.alias // \"\" | ascii_downcase | contains(\"${FILTER_ALIAS,,}\"))"
+  fi
+
+  # Model name filter (case-insensitive, contains)
+  if [[ -n $FILTER_MODEL ]]; then
+    filter+=" | select(.key | ascii_downcase | contains(\"${FILTER_MODEL,,}\"))"
+  fi
+
+  printf '%s' "$filter"
+}
+
+output_simple() {
+  local -- filter=$1
+  local -- jq_cmd="[$filter] | .[] | .key"
+
+  if [[ -n $SORT_FIELD ]]; then
+    jq_cmd="[$filter] | sort_by(.value.$SORT_FIELD)"
+    ((REVERSE==0)) || jq_cmd+=' | reverse'
+    jq_cmd+=' | .[] | .key'
+  fi
+
+  if ((LIMIT)); then
+    jq -r "$jq_cmd" "$MODELS_JSON" | head -n "$LIMIT"
+  else
+    jq -r "$jq_cmd" "$MODELS_JSON"
+  fi
+}
+
+output_table() {
+  local -- filter=$1
+  local -a cols
+  IFS=',' read -ra cols <<< "$COLS"
+
+  # Build jq select for columns
+  local -- col_select=''
+  for col in "${cols[@]}"; do
+    col=${col// /}  # trim whitespace
+    if [[ $col == model ]]; then
+      col_select+='.key, '
+    else
+      col_select+=".value.$col // \"-\", "
+    fi
+  done
+  col_select=${col_select%, }  # remove trailing comma
+
+  local -- jq_cmd="[$filter]"
+  if [[ -n $SORT_FIELD ]]; then
+    jq_cmd+=" | sort_by(.value.$SORT_FIELD)"
+    ((REVERSE==0)) || jq_cmd+=' | reverse'
+  fi
+  jq_cmd+=" | .[] | [$col_select] | @tsv"
+
+  # Print header
+  local -- header=''
+  for col in "${cols[@]}"; do
+    header+="${col^^}	"
+  done
+  printf '%s\n' "${header%	}"
+
+  # Print data
+  if ((LIMIT)); then
+    jq -r "$jq_cmd" "$MODELS_JSON" | head -n "$LIMIT"
+  else
+    jq -r "$jq_cmd" "$MODELS_JSON"
+  fi
+}
+
+output_json() {
+  local -- filter=$1
+  local -- jq_cmd="[$filter | {key: .key, value: .value}] | from_entries"
+
+  if [[ -n $SORT_FIELD ]]; then
+    jq_cmd="[$filter] | sort_by(.value.$SORT_FIELD)"
+    ((REVERSE==0)) || jq_cmd+=' | reverse'
+    jq_cmd+=' | [.[] | {key: .key, value: .value}] | from_entries'
+  fi
+
+  if ((LIMIT)); then
+    jq "[$filter] | sort_by(.value.${SORT_FIELD:-model})$( ((REVERSE==0)) || echo ' | reverse' ) | .[:$LIMIT] | [.[] | {key: .key, value: .value}] | from_entries" "$MODELS_JSON"
+  else
+    jq "$jq_cmd" "$MODELS_JSON"
+  fi
+}
+
+show_stats() {
+  local -- filter
+  filter=$(build_jq_filter)
+
+  printf 'Model Statistics\n'
+  printf '================\n\n'
+
+  printf 'Total models: %s\n' "$(jq "[to_entries[]] | length" "$MODELS_JSON")"
+  printf 'Filtered models: %s\n' "$(jq "[$filter] | length" "$MODELS_JSON")"
+  printf '\n'
+
+  printf 'By Parent:\n'
+  jq -r "[$filter] | group_by(.value.parent) | .[] | \"  \" + .[0].value.parent + \": \" + (length | tostring)" "$MODELS_JSON"
+  printf '\n'
+
+  printf 'By Category:\n'
+  jq -r "[$filter] | group_by(.value.model_category) | .[] | \"  \" + .[0].value.model_category + \": \" + (length | tostring)" "$MODELS_JSON"
+}
+
+count_by_field() {
+  local -- field=$1
+  local -- filter
+  filter=$(build_jq_filter)
+
+  jq -r "[$filter] | group_by(.value.$field) | .[] | (.[0].value.$field // \"(null)\") + \"	\" + (length | tostring)" "$MODELS_JSON" | sort -t$'\t' -k2 -rn | column -t -s$'\t'
+}
+
+unique_values() {
+  local -- field=$1
+  local -- filter
+  filter=$(build_jq_filter)
+
+  jq -r "[$filter] | [.[].value.$field] | unique | .[]" "$MODELS_JSON" | sort
+}
+
+list_fields() {
+  jq -r 'to_entries | .[0].value | keys[]' "$MODELS_JSON" | sort
+}
+
+main() {
+  local -- cmd=''
+  local -- cmd_arg=''
+
+  # Parse arguments
+  while (($#)); do
+    case $1 in
+      -A|--all) ALL_MODELS=1 ;;
+      -p|--parent)
+                FILTER_PARENT=$2; shift ;;
+      -c|--category)
+                FILTER_CATEGORY=$2; shift ;;
+      -f|--family)
+                FILTER_FAMILY=$2; shift ;;
+      -a|--alias)
+                FILTER_ALIAS=$2; shift ;;
+      -m|--model)
+                FILTER_MODEL=$2; shift ;;
+      -v|--available)
+                FILTER_AVAILABLE=$2; shift ;;
+      -e|--enabled)
+                FILTER_ENABLED=$2; shift ;;
+      -o|--output-to)
+                OUTPUT=$2; shift ;;
+      -C|--columns)
+                COLS=$2; shift ;;
+      -s|--sort-field)
+                SORT_FIELD=$2; shift ;;
+      -r|--sort-reverse)
+                REVERSE=1 ;;
+      -l|--limit)
+                LIMIT=$2; shift ;;
+      --stats)  cmd=stats ;;
+      --count)  cmd=count; cmd_arg=$2; shift ;;
+      --unique) cmd=unique; cmd_arg=$2; shift ;;
+      --fields) cmd=fields ;;
+      -h|--help)
+                show_help; return 0 ;;
+      -V|--version)
+                printf '%s %s\n' "$SCRIPT_NAME" "$VERSION"; return 0 ;;
+      -[ApcfamveoCsrlhV]?*)
+                set -- "${1:0:2}" "-${1:2}" "${@:2}"; continue ;;
+      *) die 22 "Unknown option ${1@Q}" ;;
+    esac
+    shift
+  done
+
+  check_deps
+
+  # Handle utility commands
+  case $cmd in
+    stats)  show_stats; exit 0 ;;
+    count)  count_by_field "$cmd_arg"; exit 0 ;;
+    unique) unique_values "$cmd_arg"; exit 0 ;;
+    fields) list_fields; exit 0 ;;
+  esac
+
+  # Build filter and output
+  local -- filter
+  filter=$(build_jq_filter)
+
+  case $OUTPUT in
+    simple) output_simple "$filter" ;;
+    table)  output_table "$filter" | column -t -s$'\t' ;;
+    json)   output_json "$filter" ;;
+    *)      die 2 "Unknown output format ${OUTPUT@Q}" ;;
+  esac
+}
+
+main "$@"
+#fin
