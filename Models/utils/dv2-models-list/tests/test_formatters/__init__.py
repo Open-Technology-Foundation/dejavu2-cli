@@ -1,4 +1,0 @@
-"""
-Formatter tests package.
-"""
-# fin

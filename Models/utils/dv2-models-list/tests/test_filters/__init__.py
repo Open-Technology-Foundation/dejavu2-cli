@@ -1,4 +1,0 @@
-"""
-Filter tests package.
-"""
-# fin
