@@ -246,6 +246,39 @@ Examples:
 
 This naming convention helps users quickly identify agents by both their reference names and functions.
 
+## Specialized Agent Usage
+
+Some agents have specific usage patterns for optimal results.
+
+### SEOMeta - SEO Meta Tag Generator
+
+Analyzes web content and generates SEO-friendly meta tags in JSON format.
+
+**Usage:**
+
+    # From URL (use -L to follow redirects)
+    curl -sL "https://example.com/" | dv2 -T SEOMeta 2>/dev/null | sed '/^```/d' | jq .
+
+    # From local file
+    dv2 -T SEOMeta -r webpage.html 2>/dev/null | sed '/^```/d' | jq .
+
+    # Extract specific field
+    curl -sL URL | dv2 -T SEOMeta 2>/dev/null | sed '/^```/d' | jq -r '.meta_description'
+
+**Important:** Always use `curl -L` when fetching URLs to follow redirects. Without it, redirect pages (301/302) will produce generic/useless output.
+
+**Output fields:**
+
+| Field | Description |
+|-------|-------------|
+| `title` | Page title for search results (50-60 chars) |
+| `meta_description` | Search result snippet (150-160 chars) |
+| `meta_keywords` | Array of 5-10 relevant terms |
+| `og_title`, `og_description`, `og_type` | Open Graph tags for social sharing |
+| `twitter_card`, `twitter_description` | Twitter Card tags |
+| `robots` | Indexing directive (e.g., "index,follow") |
+| `canonical_suggestion` | Suggested canonical URL |
+
 ## Security Considerations
 
 - System prompts should never contain sensitive information

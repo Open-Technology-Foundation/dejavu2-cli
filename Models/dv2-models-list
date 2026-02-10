@@ -5,17 +5,20 @@ set -euo pipefail
 shopt -s inherit_errexit
 
 declare -r VERSION=1.0.0
+#shellcheck disable=SC2155
 declare -r SCRIPT_PATH=$(realpath -- "$0")
 declare -r SCRIPT_DIR=${SCRIPT_PATH%/*} SCRIPT_NAME=${SCRIPT_PATH##*/}
 declare -r MODELS_JSON="$SCRIPT_DIR"/Models.json
 
 # Defaults
+declare -- EDITOR=${EDITOR:-nano}
 declare -i ALL_MODELS=0 REVERSE=0
 declare -- OUTPUT=simple SORT_FIELD='' COLS='model,alias,parent,context_window'
 declare -- FILTER_PARENT='' FILTER_CATEGORY='' FILTER_FAMILY='' FILTER_ALIAS='' FILTER_MODEL=''
 declare -i FILTER_AVAILABLE=1 FILTER_ENABLED=1 LIMIT=0
 
 die() { >&2 printf '%s: %s\n' "$SCRIPT_NAME" "${@:2}"; exit "${1:-0}"; }
+noarg() { (($# > 1)) || die 22 "Option ${1@Q} requires an argument"; }
 
 show_help() {
   cat <<HELP
@@ -46,7 +49,7 @@ Sorting and limiting:
   -l, --limit N         Limit results to N entries
 
 Editing:
-  -E, --edit MODEL      Edit model in \$EDITOR (by name or alias)
+  -E, --edit MODEL      Edit model using ${EDITOR@Q} (by name or alias)
 
 Utility commands:
   --stats               Show summary statistics
@@ -225,7 +228,7 @@ list_fields() {
 
 edit_model() {
   local -- model=$1
-  local -- canonical tmp_file editor models_file
+  local -- canonical tmp_file models_file
 
   # Resolve symlink to canonical file path
   models_file=$(realpath "$MODELS_JSON")
@@ -234,20 +237,19 @@ edit_model() {
   canonical=$(jq -r --arg m "$model" '
     to_entries[] | select(.key == $m or (.value.alias // "") == $m) | .key
   ' "$models_file" | head -1)
-  [[ -n $canonical ]] || die 1 "Model not found: $model"
+  [[ -n $canonical ]] || die 1 "Model not found ${model@Q}"
 
   # Extract to temp file (pretty JSON)
-  tmp_file="/tmp/dv2-edit-${canonical}.json"
+  tmp_file=/tmp/dv2-edit-"$canonical".json
   jq --arg m "$canonical" '.[$m]' "$models_file" > "$tmp_file"
 
   # Open in editor
-  editor=${EDITOR:-vi}
-  "$editor" "$tmp_file"
+  "$EDITOR" "$tmp_file"
 
   # Validate edited JSON
   if ! jq empty "$tmp_file" 2>/dev/null; then
     rm -f "$tmp_file"
-    die 1 "Invalid JSON syntax"
+    die 1 'Invalid JSON syntax'
   fi
 
   # Check if actually changed
@@ -284,34 +286,48 @@ main() {
     case $1 in
       -A|--all) ALL_MODELS=1 ;;
       -E|--edit)
-                cmd=edit; EDIT_MODEL=$2; shift ;;
+                noarg "$@" ;shift
+                cmd=edit; EDIT_MODEL=$1 ;;
       -p|--parent)
-                FILTER_PARENT=$2; shift ;;
+                noarg "$@" ;shift
+                FILTER_PARENT=$1 ;;
       -c|--category)
-                FILTER_CATEGORY=$2; shift ;;
+                noarg "$@" ;shift
+                FILTER_CATEGORY=$1 ;;
       -f|--family)
-                FILTER_FAMILY=$2; shift ;;
+                noarg "$@" ;shift
+                FILTER_FAMILY=$1 ;;
       -a|--alias)
-                FILTER_ALIAS=$2; shift ;;
+                noarg "$@" ;shift
+                FILTER_ALIAS=$1 ;;
       -m|--model)
-                FILTER_MODEL=$2; shift ;;
+                noarg "$@" ;shift
+                FILTER_MODEL=$1 ;;
       -v|--available)
-                FILTER_AVAILABLE=$2; shift ;;
+                noarg "$@" ;shift
+                FILTER_AVAILABLE=$1 ;;
       -e|--enabled)
-                FILTER_ENABLED=$2; shift ;;
+                noarg "$@" ;shift
+                FILTER_ENABLED=$1 ;;
       -o|--output-to)
-                OUTPUT=$2; shift ;;
+                noarg "$@" ;shift
+                OUTPUT=$1 ;;
       -C|--columns)
-                COLS=$2; shift ;;
+                noarg "$@" ;shift
+                COLS=$1 ;;
       -s|--sort-field)
-                SORT_FIELD=$2; shift ;;
+                noarg "$@" ;shift
+                SORT_FIELD=$1 ;;
       -r|--sort-reverse)
                 REVERSE=1 ;;
       -l|--limit)
-                LIMIT=$2; shift ;;
+                noarg "$@" ;shift
+                LIMIT=$1 ;;
       --stats)  cmd=stats ;;
-      --count)  cmd=count; cmd_arg=$2; shift ;;
-      --unique) cmd=unique; cmd_arg=$2; shift ;;
+      --count)  noarg "$@" ;shift
+                cmd=count; cmd_arg=$1 ;;
+      --unique) noarg "$@" ;shift
+                cmd=unique; cmd_arg=$1 ;;
       --fields) cmd=fields ;;
       -h|--help)
                 show_help; return 0 ;;
@@ -319,7 +335,7 @@ main() {
                 printf '%s %s\n' "$SCRIPT_NAME" "$VERSION"; return 0 ;;
       -[AEpcfamveoCsrlhV]?*)
                 set -- "${1:0:2}" "-${1:2}" "${@:2}"; continue ;;
-      *) die 22 "Unknown option ${1@Q}" ;;
+      *)        die 22 "Unknown option ${1@Q}" ;;
     esac
     shift
   done

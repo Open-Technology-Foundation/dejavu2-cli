@@ -7,6 +7,7 @@ This module provides client initialization and query functions for multiple LLM 
 - Anthropic (Claude 3.5, Claude 4 with extended thinking)
 - Google (Gemini 2.0/2.5 via google-genai SDK)
 - Ollama (local and remote deployments)
+- Claude CLI (claude code in non-interactive mode)
 
 Key Features:
 - Unified query interface via route_query_by_family()
@@ -1093,6 +1094,142 @@ def get_available_gemini_models(api_key: str) -> list[str]:
     return []
 
 
+def query_claude_cli(
+  query_text: str,
+  systemprompt: str,
+  model: str,
+  model_parameters: dict[str, Any],
+  conversation_messages: list[dict[str, str]] | None = None,
+) -> str:
+  """
+  Send a query to the Claude CLI in non-interactive mode.
+
+  Uses `claude --print` to run queries through the locally installed Claude Code CLI.
+  Supports two variants: safe mode (no tools) and agent mode (tools enabled).
+
+  Args:
+      query_text: The user's query or prompt
+      systemprompt: System prompt that guides the model's behavior
+      model: The model identifier (claude-cli or claude-cli-agent)
+      model_parameters: Model parameters including tools flag
+      conversation_messages: Optional list of previous messages for multi-turn
+
+  Returns:
+      The model's response as a string
+
+  Raises:
+      APIError: If the CLI returns an error or is not installed
+  """
+  import subprocess
+
+  # Build the command
+  cmd = ["claude", "--print", "--output-format", "json", "--verbose"]
+
+  # Add system prompt if provided
+  if systemprompt:
+    cmd.extend(["--system-prompt", systemprompt])
+
+  # Disable tools for safe mode
+  if not model_parameters.get("tools", False):
+    cmd.extend(["--allowedTools", ""])
+
+  # Build prompt with conversation history
+  prompt_parts = []
+  if conversation_messages:
+    for msg in conversation_messages:
+      role = msg.get("role", "user")
+      content = msg.get("content", "")
+      if role == "user":
+        prompt_parts.append(f"<User>\n{content}\n</User>")
+      elif role == "assistant":
+        prompt_parts.append(f"<Assistant>\n{content}\n</Assistant>")
+
+  prompt_parts.append(query_text)
+  full_prompt = "\n\n".join(prompt_parts)
+
+  logger.debug(f"Claude CLI command: {' '.join(cmd)}")
+  logger.debug(f"Claude CLI prompt length: {len(full_prompt)} chars")
+
+  try:
+    result = subprocess.run(
+      cmd,
+      input=full_prompt,
+      capture_output=True,
+      text=True,
+      timeout=300,
+      shell=False,
+    )
+
+    if result.returncode != 0:
+      stderr = result.stderr.strip()
+      logger.error(f"Claude CLI error (exit {result.returncode}): {stderr}")
+      raise APIError(f"Claude CLI error: {stderr or 'Unknown error'}")
+
+    # Parse JSON response
+    stdout = result.stdout.strip()
+    if not stdout:
+      raise APIError("Claude CLI returned empty response")
+
+    try:
+      data = json.loads(stdout)
+    except json.JSONDecodeError:
+      # If not valid JSON, return raw output
+      logger.warning("Claude CLI returned non-JSON output, using raw text")
+      return stdout
+
+    # JSON output is an array of event objects
+    # Find the assistant message and optional result event
+    if isinstance(data, list):
+      response_text = ""
+      for event in data:
+        if not isinstance(event, dict):
+          continue
+        event_type = event.get("type", "")
+
+        # Extract text from assistant message events
+        if event_type == "assistant":
+          message = event.get("message", {})
+          for block in message.get("content", []):
+            if isinstance(block, dict) and block.get("type") == "text":
+              response_text += block.get("text", "")
+
+        # Log metadata from result event
+        elif event_type == "result":
+          if event.get("is_error"):
+            raise APIError(f"Claude CLI error: {event.get('result', 'Unknown error')}")
+          if event.get("cost_usd") is not None:
+            logger.info(f"Claude CLI cost: ${event['cost_usd']:.6f}")
+          if event.get("duration_ms") is not None:
+            logger.info(f"Claude CLI duration: {event['duration_ms']}ms")
+          if event.get("num_turns") is not None:
+            logger.debug(f"Claude CLI turns: {event['num_turns']}")
+          # Result event may also carry final text
+          result_text = event.get("result", "")
+          if result_text and not response_text:
+            response_text = result_text
+
+      if not response_text:
+        raise APIError("Claude CLI returned no assistant message")
+      return response_text
+
+    # Fallback: single object response
+    if isinstance(data, dict):
+      if data.get("is_error"):
+        raise APIError(f"Claude CLI error: {data.get('result', 'Unknown error')}")
+      response_text = data.get("result", "")
+      if response_text:
+        return response_text
+
+    raise APIError("Claude CLI returned unexpected response format")
+
+  except FileNotFoundError:
+    raise APIError(
+      "Claude CLI not found. Install it with: npm install -g @anthropic-ai/claude-code"
+    )
+  except subprocess.TimeoutExpired:
+    raise APIError(f"Claude CLI timed out after 300 seconds for {model}")
+
+
 def validate_query_parameters(model: str, max_tokens: int, model_parameters: dict[str, Any]) -> int:
   """
   Validate and adjust query parameters.
@@ -1296,6 +1433,9 @@ def route_query_by_family(
 
       return query_openai(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
 
+    case "claude-cli":
+      return query_claude_cli(query_text, systemprompt, model, model_parameters, conversation_messages)
+
     case _:
       return None
 
@@ -1326,6 +1466,9 @@ def route_query_by_name(
   Returns:
     Model response or None if no match
   """
+  if model and model.startswith("claude-cli"):
+    return query_claude_cli(query_text, systemprompt, model, {}, conversation_messages)
+
   if model and model.startswith("claude"):
     client = get_anthropic_client(clients)
     return query_anthropic(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
