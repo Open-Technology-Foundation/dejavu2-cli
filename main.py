@@ -87,7 +87,7 @@ def setup_application(kwargs: dict[str, Any]) -> tuple:
   # Set up paths (convert to str for backward compatibility)
   template_path = str(SCRIPT_DIR / config["paths"]["template_path"])
   models_json_path = str(SCRIPT_DIR / "Models.json")
-  customkb_executable = config["paths"].get("customkb", "/ai/scripts/customkb/customkb")
+  customkb_executable = config["paths"].get("customkb", "/ai/scripts/customkb.bash/customkb")
   vectordbs_path = config.get("vectordbs_path", "/var/lib/vectordbs")
 
   paths = {

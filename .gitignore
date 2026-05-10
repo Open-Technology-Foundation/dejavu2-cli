@@ -3,6 +3,7 @@ PURPOSE-FUNCTIONALITY-USAGE.md
 AUDIT-*.md
 BASH-CODING-STANDARD.md
 CLAUDE.md
+.claude/
 
 # Docs folder working documents
 docs/AUDIT-*.md
