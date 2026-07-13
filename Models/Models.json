@@ -117,6 +117,7 @@
     "available": 5,
     "enabled": 1,
     "reasoning": true,
+    "supports_temperature": false,
     "info_updated": "2026-07-12"
   },
   "claude-fable-5": {
