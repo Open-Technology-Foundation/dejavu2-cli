@@ -57,3 +57,4 @@ temp/
 .temp
 .venv
 version_updater.py
+.archive/
