@@ -551,6 +551,7 @@
     "available": 6,
     "enabled": 1,
     "reasoning": true,
+    "background_mode": true,
     "info_updated": "2026-07-12"
   },
   "gpt-5.6-terra": {
@@ -571,6 +572,7 @@
     "available": 5,
     "enabled": 1,
     "reasoning": true,
+    "background_mode": true,
     "info_updated": "2026-07-12"
   },
   "gpt-5.6-luna": {
@@ -591,6 +593,7 @@
     "available": 1,
     "enabled": 1,
     "reasoning": true,
+    "background_mode": true,
     "info_updated": "2026-07-12"
   },
   "gpt-5-mini": {
