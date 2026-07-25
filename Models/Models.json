@@ -96,7 +96,7 @@
     "max_output_tokens": 128000,
     "token_costs": "$5.00/$25.00 per 1M tokens",
     "vision": 1,
-    "available": 7,
+    "available": 5,
     "enabled": 1,
     "reasoning": true,
     "supports_temperature": false,
@@ -161,6 +161,7 @@
     "available": 8,
     "enabled": 1,
     "reasoning": true,
+    "supports_temperature": false,
     "info_updated": "2026-07-12"
   },
   "claude-cli": {
