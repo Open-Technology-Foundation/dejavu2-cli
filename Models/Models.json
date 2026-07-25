@@ -61,7 +61,7 @@
   },
   "claude-opus-4-8": {
     "model": "claude-opus-4-8",
-    "alias": "opus",
+    "alias": "opus48",
     "parent": "Anthropic",
     "model_category": "LLM",
     "family": "anthropic",
@@ -78,6 +78,27 @@
     "enabled": 1,
     "reasoning": true,
     "info_updated": "2026-07-12"
+  },
+  "claude-opus-5": {
+    "model": "claude-opus-5",
+    "alias": "opus",
+    "parent": "Anthropic",
+    "model_category": "LLM",
+    "family": "anthropic",
+    "series": "claude5",
+    "description": "Claude Opus 5 - Strongest Opus for complex agentic coding, deep reasoning, and long-horizon work",
+    "data_cutoff_date": "2026-05",
+    "url": "https://api.anthropic.com/v1",
+    "apikey": "ANTHROPIC_API_KEY",
+    "context_window": 1000000,
+    "max_output_tokens": 128000,
+    "token_costs": "$5.00/$25.00 per 1M tokens",
+    "vision": 1,
+    "available": 7,
+    "enabled": 1,
+    "reasoning": true,
+    "supports_temperature": false,
+    "info_updated": "2026-07-25"
   },
   "claude-sonnet-4-6": {
     "model": "claude-sonnet-4-6",
