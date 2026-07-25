@@ -57,6 +57,7 @@
     "available": 6,
     "enabled": 1,
     "reasoning": true,
+    "supports_temperature": false,
     "info_updated": "2026-05-23"
   },
   "claude-opus-4-8": {
@@ -77,6 +78,7 @@
     "available": 6,
     "enabled": 1,
     "reasoning": true,
+    "supports_temperature": false,
     "info_updated": "2026-07-12"
   },
   "claude-opus-5": {
