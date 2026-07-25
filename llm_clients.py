@@ -207,6 +207,7 @@ def query_anthropic(
   temperature: float,
   max_tokens: int,
   conversation_messages: list[dict[str, str]] | None = None,
+  supports_temperature: bool = True,
 ) -> str:
   """
   Send a query to the Anthropic API and return the response.
@@ -222,6 +223,9 @@ def query_anthropic(
       temperature: Sampling temperature (higher = more random)
       max_tokens: Maximum number of tokens in the response
       conversation_messages: Optional list of previous messages for multi-turn
+      supports_temperature: Whether the model accepts a temperature parameter.
+          Claude Opus 4.7+ and Sonnet 5 reject sampling parameters with a 400,
+          so temperature is omitted from the request when this is False.
 
   Returns:
       The model's response as a string
@@ -261,14 +265,21 @@ def query_anthropic(
     messages.append({"role": "user", "content": query_text})
 
     # Make the API call with conversation history included
-    message = client.messages.create(
-      max_tokens=max_tokens,
-      messages=messages,
-      model=model,
-      system=systemprompt,
-      temperature=temperature,
-      extra_headers=extra_headers,
-    )
+    request_params = {
+      "max_tokens": max_tokens,
+      "messages": messages,
+      "model": model,
+      "system": systemprompt,
+      "extra_headers": extra_headers,
+    }
+
+    # Omit temperature for models that reject sampling parameters (400 error)
+    if supports_temperature:
+      request_params["temperature"] = temperature
+    else:
+      logger.debug(f"{model} does not support temperature; omitting from request")
+
+    message = client.messages.create(**request_params)
 
     return message.content[0].text
   except ValueError:
@@ -1414,7 +1425,16 @@ def route_query_by_family(
   match model_family:
     case "anthropic":
       client = get_anthropic_client(clients)
-      return query_anthropic(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
+      return query_anthropic(
+        client,
+        query_text,
+        systemprompt,
+        model,
+        temperature,
+        max_tokens,
+        conversation_messages,
+        supports_temperature=(model_parameters or {}).get("supports_temperature", True),
+      )
 
     case "google":
       google_api_key = validate_google_api_key(api_keys)
@@ -1449,6 +1469,7 @@ def route_query_by_name(
   max_tokens: int,
   conversation_messages: list[dict[str, str]],
   api_keys: dict[str, str],
+  model_parameters: dict[str, Any] | None = None,
 ) -> str | None:
   """
   Route query based on model name prefixes as fallback.
@@ -1462,6 +1483,7 @@ def route_query_by_name(
     max_tokens: Maximum tokens
     conversation_messages: Conversation history
     api_keys: API keys
+    model_parameters: Optional Models.json entry; supplies supports_temperature
 
   Returns:
     Model response or None if no match
@@ -1471,7 +1493,16 @@ def route_query_by_name(
 
   if model and model.startswith("claude"):
     client = get_anthropic_client(clients)
-    return query_anthropic(client, query_text, systemprompt, model, temperature, max_tokens, conversation_messages)
+    return query_anthropic(
+      client,
+      query_text,
+      systemprompt,
+      model,
+      temperature,
+      max_tokens,
+      conversation_messages,
+      supports_temperature=(model_parameters or {}).get("supports_temperature", True),
+    )
 
   elif model and model.startswith(("llama", "nemo", "gemma")):
     client = clients.get("ollama")
@@ -1538,7 +1569,9 @@ def query(
       return result
 
     # Fallback to model name prefixes if family not recognized
-    result = route_query_by_name(model, clients, query_text, systemprompt, temperature, max_tokens, conversation_messages, api_keys)
+    result = route_query_by_name(
+      model, clients, query_text, systemprompt, temperature, max_tokens, conversation_messages, api_keys, model_parameters
+    )
 
     if result is not None:
       return result

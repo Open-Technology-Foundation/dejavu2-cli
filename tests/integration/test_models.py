@@ -179,11 +179,12 @@ class TestModelIntegration:
     openai_call_args = mock_openai_query.call_args
     assert openai_call_args.args[3] == "gpt-4o", "OpenAI should be called with gpt-4o model"
 
-    # Verify Anthropic call had correct model
+    # Verify Anthropic call had correct model.
+    # The model may arrive positionally (client, query_text, systemprompt, model, ...)
+    # or by keyword; unrelated keyword arguments such as supports_temperature may
+    # also be present, so resolve the model from whichever place it was passed.
     anthropic_call_args = mock_anthropic_query.call_args
-    # For Anthropic, check if called with kwargs or positional args
-    if anthropic_call_args.kwargs:
-      assert anthropic_call_args.kwargs.get("model") == "claude-3-5-sonnet"
-    else:
-      # Positional args for query_anthropic: (client, query_text, systemprompt, model, ...)
-      assert anthropic_call_args.args[3] == "claude-3-5-sonnet"
+    anthropic_model = anthropic_call_args.kwargs.get("model")
+    if anthropic_model is None and len(anthropic_call_args.args) > 3:
+      anthropic_model = anthropic_call_args.args[3]
+    assert anthropic_model == "claude-3-5-sonnet"

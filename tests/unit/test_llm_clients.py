@@ -35,6 +35,8 @@ from llm_clients import (
   query_gemini,
   query_llama,
   query_openai,
+  route_query_by_family,
+  route_query_by_name,
 )
 
 
@@ -373,6 +375,83 @@ class TestAnthropicProvider:
     assert call_args[1]["temperature"] == 0.7
     assert call_args[1]["max_tokens"] == 1000
     assert call_args[1]["system"] == "You are helpful Claude"
+
+  @patch("llm_clients.Anthropic")
+  def test_query_anthropic_omits_temperature_when_unsupported(self, mock_anthropic_class):
+    """Models flagged supports_temperature=false must not receive temperature.
+
+    Claude Opus 4.7+ and Sonnet 5 reject temperature/top_p/top_k with a 400,
+    so the parameter has to be left out of the request entirely.
+    """
+    mock_client = MagicMock()
+    mock_anthropic_class.return_value = mock_client
+
+    mock_response = MagicMock()
+    mock_response.content = [MagicMock()]
+    mock_response.content[0].text = "Opus 5 response"
+    mock_client.messages.create.return_value = mock_response
+
+    result = query_anthropic(
+      client=mock_client,
+      query_text="Test query",
+      systemprompt="You are helpful",
+      model="claude-opus-5",
+      temperature=0.7,
+      max_tokens=1000,
+      supports_temperature=False,
+    )
+
+    assert result == "Opus 5 response"
+    call_kwargs = mock_client.messages.create.call_args[1]
+    assert "temperature" not in call_kwargs
+    # Everything else must still be sent
+    assert call_kwargs["model"] == "claude-opus-5"
+    assert call_kwargs["max_tokens"] == 1000
+
+  @patch("llm_clients.query_anthropic")
+  def test_route_query_passes_supports_temperature_from_model_parameters(self, mock_query_anthropic):
+    """route_query_by_family must forward the Models.json flag to query_anthropic."""
+    mock_query_anthropic.return_value = "routed"
+
+    result = route_query_by_family(
+      model_family="anthropic",
+      model="claude-opus-5",
+      clients={"anthropic": MagicMock()},
+      query_text="Test query",
+      systemprompt="You are helpful",
+      temperature=0.7,
+      max_tokens=1000,
+      conversation_messages=[],
+      model_parameters={"supports_temperature": False},
+      api_keys={"ANTHROPIC_API_KEY": "test-key"},
+    )
+
+    assert result == "routed"
+    assert mock_query_anthropic.call_args[1]["supports_temperature"] is False
+
+  @patch("llm_clients.query_anthropic")
+  def test_route_query_by_name_passes_supports_temperature(self, mock_query_anthropic):
+    """The name-prefix fallback route must honour the flag too.
+
+    Reached when a Models.json entry has no recognised family; without this
+    the flag would be silently dropped and the request would 400.
+    """
+    mock_query_anthropic.return_value = "routed by name"
+
+    result = route_query_by_name(
+      model="claude-opus-5",
+      clients={"anthropic": MagicMock()},
+      query_text="Test query",
+      systemprompt="You are helpful",
+      temperature=0.7,
+      max_tokens=1000,
+      conversation_messages=[],
+      api_keys={"ANTHROPIC_API_KEY": "test-key"},
+      model_parameters={"supports_temperature": False},
+    )
+
+    assert result == "routed by name"
+    assert mock_query_anthropic.call_args[1]["supports_temperature"] is False
 
   @patch("llm_clients.Anthropic")
   def test_query_anthropic_claude_37_features(self, mock_anthropic_class):
